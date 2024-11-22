@@ -19,6 +19,7 @@ library(readxl)
 library(haven)
 library(randomForest)
 library(bestNormalize)
+library(kableExtra)
 
 ```
 
@@ -26,20 +27,26 @@ library(bestNormalize)
 project_2_data = 
   read_csv("./data/Project_2_data.csv", na = c("NA", "", ".")) |>
   janitor::clean_names() 
+view(project_2_data)
 ```
 ```{r}
-# Summary of all variables
-summary(project_2_data)
-
-# Checking for missing values
-project_2_data %>% 
-  summarise_all(~ sum(is.na(.))) %>% 
-  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Missing_Values")
-
-# Descriptive statistics for numeric variables
-project_2_data %>% 
-  select(where(is.numeric)) %>% 
+# Summary statistics for numeric variables
+numeric_summary <- project_2_data %>%
+  select(where(is.numeric)) %>%
   summarise(across(everything(), list(mean = mean, sd = sd, median = median, min = min, max = max), na.rm = TRUE))
+
+# Display numeric summary
+numeric_summary
+
+# Summary for categorical variables
+categorical_summary <- project_2_data %>%
+  select(where(~!is.numeric(.))) %>%
+  summarise(across(everything(), ~paste(unique(.), collapse = ", ")))
+
+# Display categorical summary
+categorical_summary
+
+
 
 # Distribution of Survival Months
 ggplot(project_2_data, aes(x = survival_months)) +
@@ -77,7 +84,56 @@ ggplot(project_2_data, aes(sample = tumor_size)) +
   stat_qq() +
   stat_qq_line(color = "blue") +
   labs(title = "QQ Plot for Tumor Size", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
+# QQ plot for age
+ggplot(project_2_data, aes(sample = age)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(title = "QQ Plot for age", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
+# QQ plot for regional_node_examined
+ggplot(project_2_data, aes(sample = regional_node_examined)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(title = "QQ Plot for regional_node_examined", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
+# QQ plot for reginol_node_positive
+ggplot(project_2_data, aes(sample =reginol_node_positive)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(title = "QQ Plot for reginol_node_positive", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
 ```
+
+```{r}
+long_data <- project_2_data %>%
+  select(survival_months, tumor_size, age, regional_node_examined, reginol_node_positive) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+# Create combined violin plot
+ggplot(long_data, aes(x = Variable, y = Value)) +
+  geom_violin(fill = "skyblue", color = "black") +
+  labs(title = "Violin Plots for Selected Variables", x = "Variable", y = "Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# List of variables for violin plots
+variables <- c("survival_months", "tumor_size", "age", "regional_node_examined", "reginol_node_positive")
+
+
+# Loop to create histograms for each variable
+for (var in variables) {
+  print(ggplot(project_2_data, aes_string(x = var)) +
+    geom_histogram(bins = 30, fill = "lightgreen", color = "black") +
+    labs(title = paste("Histogram for", var), x = var, y = "Frequency") +
+    theme_minimal() )
+  
+}
+```
+
+
 ```{r}
 # Log transformation for numeric variables
 project_2_data <- project_2_data %>%
