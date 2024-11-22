@@ -1,7 +1,7 @@
 data <- read.csv("Project_2_data.csv")
 
 
-### scatter plot for Y and numeric variable
+### scatter plot for Y and numerical variable 
 library(ggplot2)
 library(gridExtra)
 numerical_vars <- c("Age","Tumor.Size","Regional.Node.Examined","Reginol.Node.Positive")
