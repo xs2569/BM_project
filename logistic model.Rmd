@@ -8,7 +8,7 @@ output: html_document
 ```{r setup}
 library(tidyverse)
 library(survival)
-
+library(caret)
 #car package for vif
 library(car)
 #MASS package for var selection
@@ -27,7 +27,7 @@ alive <- sampledf |>
   sample_n(nrow(dead))
 
 final<-bind_rows(dead, alive) |>
-  select(-Survival.Months) #error here, not sure how to address
+  dplyr::select(-Survival.Months)
 
 logit_model <- glm(Status ~ ., data = final, family = binomial())
 
@@ -47,50 +47,67 @@ cor(sampledf)
 #come back to this
   
 ```
-
-## Variable selection
-
-```{r vars}
-#also i realize maybe lm isn't the best name since they're logit but i'll change the model names later
-
-#Akaike Info Criterion
-stepAIC(logit_model, trace=0, k = 2)
-#model determined by AIC criterion: minimize AIC for better model fit
-lm_aic <- glm(Status ~ Age + Race + Marital.Status + X6th.Stage + 
-    differentiate + Estrogen.Status + Progesterone.Status + Regional.Node.Examined + 
-    Reginol.Node.Positive, family = binomial(), data = sampledf)
-#log likelihood
-logLik(lm_aic)
-
-#confusion matrix
-predictions_aic <- predict(lm_aic, type = "response")
-final_aic<-bind_rows(dead, alive) |>
-  select(-Survival.Months) #error here but not sure how to address
-final_aic$predicted_classes <- ifelse(predictions_aic > 0.5, 1, 0)
-confusionMatrix(as.factor(final_aic$predicted_classes), as.factor(final_aic$Status))
-
-#Bayesian Info Criterion
-stepAIC(logit_model, trace=0, k = log(nrow(sampledf)))
-#model determined by BIC criterion: minimize BIC for model fit
-lm_bic <- glm(Status ~ differentiate + Progesterone.Status + 
-    Regional.Node.Examined + Reginol.Node.Positive, family = binomial(), 
-    data = sampledf)
-#log likelihood
-logLik(lm_bic)
-
-#confusion matrix
-predictions_bic <- predict(lm_bic, type = "response")
-final_bic<-bind_rows(dead, alive) |>
-  select(-Survival.Months) #same error as above
-final_bic$predicted_classes <- ifelse(predictions_bic > 0.5, 1, 0)
-confusionMatrix(as.factor(final_bic$predicted_classes), as.factor(final_bic$Status))
-
+## Full model diagnostics
+``` {r full model}
 #full model LL 
 logLik(logit_model)
+
+#Diagnostic plots
+plot(logit_model)
+```
+## Variable selection
+
+```{r vars aic}
+#AIC vs. BIC var selection criteria
+#Akaike Info Criterion
+final_aic<-bind_rows(dead, alive) |>
+  dplyr::select(-Survival.Months)
+
+stepAIC(logit_model, trace=0, k = 2)
+#model determined by AIC criterion: minimize AIC for better model fit
+logit_aic <- glm(Status ~ Age + Race + Marital.Status + X6th.Stage + 
+    differentiate + Estrogen.Status + Progesterone.Status + Regional.Node.Examined + 
+    Reginol.Node.Positive, family = binomial(), data = final_aic)
+#log likelihood
+logLik(logit_aic)
+
+#confusion matrix
+predictions_aic <- predict(logit_aic, type = "response")
+final_aic$predicted_classes <- ifelse(predictions_aic > 0.5, 1, 0)
+confusionMatrix(as.factor(final_aic$predicted_classes), as.factor(final_aic$Status))
+```
+```{r bic}
+#Bayesian Info Criterion
+final_bic<-bind_rows(dead, alive) |>
+  dplyr::select(-Survival.Months)
+
+stepAIC(logit_model, trace=0, k = log(nrow(sampledf)))
+#model determined by BIC criterion: minimize BIC for model fit
+logit_bic <- glm(Status ~ differentiate + Progesterone.Status + 
+    Regional.Node.Examined + Reginol.Node.Positive, family = binomial(), 
+    data = final_bic)
+#log likelihood
+logLik(logit_bic)
+
+#confusion matrix
+predictions_bic <- predict(logit_bic, type = "response")
+final_bic$predicted_classes <- ifelse(predictions_bic > 0.5, 1, 0)
+confusionMatrix(as.factor(final_bic$predicted_classes), as.factor(final_bic$Status))
 ```
 
 ```{r diagnostics}
 #make diagnostic plots to address outlying observations and assumptions
+#Diagnostic plot for AIC model
+plot(logit_aic)
+```
+```{r diagnostics 2}
+#Diagnostic plot for BIC model
+plot(logit_bic)
+
 
 #refit models using sensitivity-specificity plots and then check performance and sensitivity/specificity
+```
+
+we can then pick and interpret the best final model
+```{r}
 ```
