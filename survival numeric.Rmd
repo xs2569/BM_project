@@ -144,6 +144,13 @@ The reduction in the C-index (from 73.9% to 71.6%) indicates a trade-off between
 ```{r outliers}
 dev_residuals <- residuals(cox_model, type = "deviance")
 plot(dev_residuals, main = "Deviance Residuals", ylab = "Residuals", xlab = "Index")
-abline(h = c(-2, 2), col = "red", lty = 2)  # Threshold for large residuals
+abline(h = c(-2, 2), col = "red", lty = 2) 
+
+surv_fit <- survfit(Surv(survival_months, status) ~ 1, data = final)
+
+plot(surv_fit, xlab = "Time (months)", ylab = "Survival Probability", 
+     main = "Survival Curve for the Final Model", col = "blue", lwd = 2)
+
+grid()
 
 ```
