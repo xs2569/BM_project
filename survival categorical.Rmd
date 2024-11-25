@@ -1,0 +1,57 @@
+---
+title: "Survival"
+author: "Shiying Wu"
+date: "2024-11-25"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(survival)
+library(car)
+```
+```{r}
+project_2_data = 
+  read_csv("./data/Project_2_data.csv", na = c("NA", "", ".")) |>
+  janitor::clean_names() |>
+  mutate(status = ifelse(status == "Dead", 1, 0))
+  
+view(project_2_data)
+
+surv_object <- Surv(time = project_2_data$survival_months, event = project_2_data$status)
+
+```
+There are 3 assumption for survival analysis of 
+1.Proportional Hazards: The ratio of the hazard functions of two individuals is constant over time. This means that if one individual is twice as likely to experience the event as another at one time point, this ratio remains constant over the study period.
+2.Independent Censoring: The censoring mechanism (where we don't observe the event for some subjects due to their dropping out or the study ending) is independent of the survival mechanism.
+3.No Time-Varying Covariates (unless explicitly modeled): Covariates (variables that might affect the survival time) are assumed to be constant over time in the basic Cox model.
+
+
+```{r variable selection}
+variables <- names(project_2_data)[!names(project_2_data) %in% c("survival_months", "status")]
+for (var in variables) {
+  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
+  model <- coxph(formula, data = project_2_data)
+  print(var)
+  print(summary(model))
+}
+
+```
+
+Based on the statistical significance and clinical relevance demonstrated in the Cox model outputs, the variables that should be included in the survival analysis are age, race, marital status (Married and Separated categories), tumor stage (t_stage), node stage (n_stage), 6th stage (x6th_stage), a_stage, differentiation status, grade, tumor size, estrogen status, progesterone status, regional node examined and regional node positive. These variables all showed significant p-values, indicating a strong influence on the survival outcomes. Including them will help in accurately modeling and understanding the factors that impact survival, providing insights necessary for informed clinical decision-making. However, care should be taken to assess and manage potential multicollinearity, especially among the staging variables, to ensure the model remains stable and interpretable.
+
+```{r Multicollinearity}
+project_2_data <- project_2_data|>
+  mutate(marital_statusMarried = ifelse(marital_status == "Married", 1, 0), 
+         marital_statusSeparated = ifelse(marital_status == "Separated", 1, 0)) 
+  
+cox_model <- coxph(Surv(survival_months, status) ~ age + race + marital_statusMarried + 
+                   marital_statusSeparated + t_stage + n_stage + x6th_stage +  differentiate +
+                   grade + a_stage + tumor_size + estrogen_status + progesterone_status + 
+                   reginol_node_positive + regional_node_examined,
+                   data = project_2_data)
+alias(cox_model)
+cor_matrix <- cor(project_2_data[, sapply(project_2_data, is.numeric)])
+print(cor_matrix)
+vifs <- vif(cox_model)  
+print(vifs)
+```
