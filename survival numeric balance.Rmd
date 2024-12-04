@@ -43,13 +43,6 @@ project_2_numdata<-
     n_stage == "N2" ~ 2,
     n_stage == "N3" ~ 3,
     TRUE ~ NA_real_),
-    x6th_stage_num = case_when(
-    x6th_stage == "IIA" ~ 1,
-    x6th_stage == "IIB" ~ 2,
-    x6th_stage == "IIIA" ~ 3,
-    x6th_stage == "IIIB" ~ 4,
-    x6th_stage == "IIIC" ~ 5,
-    TRUE ~ NA_real_),
     differentiate = case_when(
     differentiate == "Well differentiated" ~ 1,
     differentiate == "Moderately differentiated" ~ 2,
@@ -68,7 +61,6 @@ project_2_numdata<-
     ) |>
   select(-a_stage)
 
-surv_object <- Surv(time = project_2_numdata$survival_months, event = project_2_numdata$status)
 ```
 
 
@@ -81,27 +73,30 @@ for (var in variables) {
   print(summary(model))
 }
 ```
-Based on the univariate Cox model results, the final model should include statistically significant and clinically relevant variables. These include age (p = 0.0028, HR = 1.013), race (p < 0.01, with disparities for Other and White), marital status (significant for Married, p = 0.0429, HR = 0.788), t_stage (p < 2e-16, HR = 1.469), n_stage (p < 2e-16, HR = 1.857), tumor size (p < 2e-14, HR = 1.012), differentiate (p < 7e-12, HR = 1.555), 6th_stage (significant for all categories, HR = 4.572 for IIIC), estrogen status (p < 2e-16, HR = 0.402), progesterone status (p < 2e-16, HR = 0.490), regional node positive (p < 2e-16, HR = 1.056), and a_stage (regional) (p < 3e-10, HR = 0.331). Variables like Single and Widowed marital status (p > 0.05) should be excluded. Further checks for multicollinearity and clinical relevance are necessary for final variable selection.
+only marriage 
 
 ```{r Multicollinearity}
+project_2_numdata <-
+  project_2_numdata|>
+  mutate(Married = ifelse(marital_status == "Married", 1, 0)) |>
+  select(-differentiate, - marital_status)
 
 cor_matrix <- cor(project_2_numdata[, sapply(project_2_numdata, is.numeric)])
 print(cor_matrix)
 
 
 cortable<-project_2_numdata|>
-  select(-race, -marital_status,-x6th_stage)
+  select(-race,-x6th_stage)
 cortable$regional_node_examined
 chart.Correlation(cortable, histogram=TRUE, pch=19)
 ```
 We have to choice 1 between 
-differentiate - grade
-t stage  - tumor size
-n stage - regional_node_possitive - x6th_stage_num
+t_stage - tumor size
+n stage - regional_node_possitive
 
 ```{r Multicollinearity continous}
-muldata = project_2_numdata |>
-  select(-differentiate, -x6th_stage_num)
+muldata = project_2_numdata
+  
   
 cox_model <- coxph(Surv(survival_months, status) ~.,
                    data = muldata)
@@ -111,12 +106,9 @@ print(vifs)
 ```
 
 
-The VIF analysis reveals significant multicollinearity for n_stage (VIF = 10.94, GVIF^(1/(2Df)) =3.31), x6th_stage_num (VIF = 1.56, GVIF^(1/(2Df)) =1.25), reginol_node_positive (VIF = 4.13, GVIF^(1/(2Df)) =2.03), and t_stage (VIF = 3.83, GVIF^(1/(2Df)) =1.96), indicating redundancy. Tumor_size shows moderate multicollinearity (VIF = 2.62, GVIF^(1/(2Df)) =1.62), while other variables have acceptable VIFs near 1. Variables with high multicollinearity should be reconsidered for exclusion.
-also shows we need to remove. So I decided to remove t_stage, n_stage, reginol_node_positive, 
-
 ```{r model}
 final = muldata |>
-  select(-t_stage, -n_stage, -reginol_node_positive)
+  select(-t_stage, -n_stage)
   
 cox_model <- coxph(Surv(survival_months, status) ~.,
                    data = final)
@@ -131,11 +123,10 @@ plot(ph_test)
 
 ```
 
-The Cox model assumes that hazard ratios are constant over time. A non-significant p-value (p > 0.05) indicates that the PH assumption holds. As GLOBAL 50.520 14 5.0e-06, the model did not meet the assumption, as same as estrogen_status, progesterone_status, and a_stage_regional. We need further improve our model.
+The Cox model assumes that hazard ratios are constant over time. A non-significant p-value (p > 0.05) indicates that the PH assumption holds. As GLOBAL 48.732 15 1.9e-05, the model did not meet the assumption, as same as estrogen_status, progesterone_status, and a_stage_regional. We need further improve our model.
 ```{r phtest improved}
-finalmodel <- coxph(Surv(survival_months, status) ~ age + race + marital_status +
-                            grade + tumor_size + 
-                            regional_node_examined + x6th_stage,
+finalmodel <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            tumor_size + regional_node_examined + a_stage_regional + Married,
                             data = final)
 
 
@@ -146,13 +137,6 @@ plot(ph_test)
 cox_model$concordance
 finalmodel$concordance
 ```
-
-
-No Clear Trends: If the solid line remains flat (close to zero), it indicates that the PH assumption is satisfied for that variable.
-Upward/Downward Trends: A visible trend or deviation indicates that the proportional hazards assumption may be violated for the corresponding variable, suggesting time-dependent effects.
-
-A C-index of 0.716 suggests that the model has good discriminatory power, meaning it can correctly rank the survival times for about 71.6% of the pairs.The standard error is 0.01075, indicating a narrow range of variability in the concordance estimate, suggesting robust performance. 
-The reduction in the C-index (from 73.9% to 71.6%) indicates a trade-off between model complexity and performance.
 
 ```{r outliers}
 dev_residuals <- residuals(cox_model, type = "deviance")
