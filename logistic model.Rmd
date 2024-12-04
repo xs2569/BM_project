@@ -15,6 +15,9 @@ library(car)
 library(MASS)
 
 data <- read.csv("Project_2_data.csv")
+view(data)
+
+
 
 sampledf <- data |>
   mutate(Status = ifelse(Status == "Dead", 1, 0))
@@ -70,7 +73,7 @@ logit_aic <- glm(Status ~ Age + Race + Marital.Status + X6th.Stage +
     Reginol.Node.Positive, family = binomial(), data = final_aic)
 #log likelihood
 logLik(logit_aic)
-
+vif(logit_aic)
 #confusion matrix
 predictions_aic <- predict(logit_aic, type = "response")
 final_aic$predicted_classes <- ifelse(predictions_aic > 0.5, 1, 0)
@@ -88,6 +91,7 @@ logit_bic <- glm(Status ~ differentiate + Progesterone.Status +
     data = final_bic)
 #log likelihood
 logLik(logit_bic)
+
 
 #confusion matrix
 predictions_bic <- predict(logit_bic, type = "response")
