@@ -124,6 +124,7 @@ plot(ph_test)
 ```
 
 The Cox model assumes that hazard ratios are constant over time. A non-significant p-value (p > 0.05) indicates that the PH assumption holds. As GLOBAL 48.732 15 1.9e-05, the model did not meet the assumption, as same as estrogen_status, progesterone_status, and a_stage_regional. We need further improve our model.
+
 ```{r phtest improved}
 finalmodel <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
                             tumor_size + regional_node_examined + a_stage_regional + Married,
