@@ -1,6 +1,6 @@
 ---
 title: "Final Project"
-author: "Shiying Wu, Maggie Hsu"
+author: "Shiying Wu, Maggie Hsu, Xun Sun"
 date: "`r Sys.Date()`"
 output: html_document
 ---
