@@ -115,3 +115,85 @@ plot(logit_bic)
 we can then pick and interpret the best final model
 ```{r}
 ```
+
+
+## Use the balanced model for regression
+```{r}
+# Load required libraries
+library(tidyverse)
+library(survival)
+library(caret)
+library(car)  # For VIF checks
+library(MASS) # For stepwise variable selection
+
+# Load the balanced dataset
+balance_data <- read.csv("project_2_numdata.csv")
+
+# View dataset structure (optional)
+str(balance_data)
+view(balance_data)
+
+# Logistic Regression Full Model
+logit_model_balance <- glm(status ~ ., data = balance_data, family = binomial())
+
+# Model Summary
+summary(logit_model_balance)
+
+# Predictions
+predictions <- predict(logit_model_balance, type = "response")
+
+# Classify Predictions
+data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Confusion Matrix
+confusionMatrix(as.factor(data$predicted_classes), as.factor(data$Status))
+
+
+# Variance Inflation Factor (VIF) to detect multicollinearity
+vif(logit_model_balance)
+
+# Correlation Matrix
+cor_matrix <- cor(data[, sapply(data, is.numeric)])
+print(cor_matrix)
+
+
+# Log-Likelihood of the Full Model
+logLik(logit_model_balance)
+
+# Diagnostic Plots
+plot(logit_model_balance)
+```
+
+```{r}
+# Stepwise Selection using AIC
+logit_aic <- stepAIC(logit_model, trace = 0, k = 2)
+
+# Final AIC Model
+summary(logit_aic)
+
+# Log-Likelihood and VIF
+logLik(logit_aic)
+vif(logit_aic)
+
+# Predictions and Confusion Matrix
+predictions_aic <- predict(logit_aic, type = "response")
+data$predicted_classes_aic <- ifelse(predictions_aic > 0.5, 1, 0)
+confusionMatrix(as.factor(data$predicted_classes_aic), as.factor(data$Status))
+```
+
+```{r}
+# Stepwise Selection using BIC
+logit_bic <- stepAIC(logit_model, trace = 0, k = log(nrow(data)))
+
+# Final BIC Model
+summary(logit_bic)
+
+# Log-Likelihood
+logLik(logit_bic)
+
+# Predictions and Confusion Matrix
+predictions_bic <- predict(logit_bic, type = "response")
+data$predicted_classes_bic <- ifelse(predictions_bic > 0.5, 1, 0)
+confusionMatrix(as.factor(data$predicted_classes_bic), as.factor(data$Status))
+```
+
