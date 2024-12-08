@@ -125,6 +125,7 @@ library(survival)
 library(caret)
 library(car)  # For VIF checks
 library(MASS) # For stepwise variable selection
+library(glmnet)
 
 # Load the balanced dataset
 balance_data <- read.csv("project_2_numdata.csv")
@@ -132,6 +133,63 @@ balance_data <- read.csv("project_2_numdata.csv")
 # View dataset structure (optional)
 str(balance_data)
 view(balance_data)
+
+# Summary statistics for numerical variables
+summary(balance_data)
+
+# Visualize distributions of numerical variables
+numerical_vars <- balance_data[, sapply(balance_data, is.numeric)]
+
+# Histograms
+par(mfrow = c(2, 2))  # Arrange multiple plots
+for (col in colnames(numerical_vars)) {
+  hist(numerical_vars[[col]], main = paste("Histogram of", col), xlab = col, col = "lightblue")
+}
+
+# Density plots for more detailed distributions
+for (col in colnames(numerical_vars)) {
+  plot(density(numerical_vars[[col]], na.rm = TRUE), main = paste("Density Plot of", col), xlab = col)
+}
+
+
+```
+
+
+
+```{r}
+balance_data$race <- as.factor(balance_data$race)
+balance_data$marital_status <- as.factor(balance_data$marital_status)
+balance_data$a_stage <- as.factor(balance_data$a_stage)
+
+# Frequency tables
+categorical_vars <- balance_data[, sapply(balance_data, is.factor)]
+
+for (col in colnames(categorical_vars)) {
+  cat("Frequency of", col, ":\n")
+  print(table(categorical_vars[[col]]))
+}
+
+# Bar plots
+par(mfrow = c(2, 2))
+for (col in colnames(categorical_vars)) {
+  barplot(table(categorical_vars[[col]]), main = paste("Barplot of", col), col = "lightgreen")
+}
+
+```
+
+```{r}
+# Correlation matrix
+cor_matrix <- cor(balance_data[, sapply(balance_data, is.numeric)], use = "complete.obs")
+print(cor_matrix)
+
+# Visualize correlations
+library(corrplot)
+corrplot(cor_matrix, method = "circle", main = "Correlation Matrix")
+```
+
+
+```{r}
+
 
 # Logistic Regression Full Model
 logit_model_balance <- glm(status ~ ., data = balance_data, family = binomial())
