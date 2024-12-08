@@ -185,12 +185,25 @@ print(cor_matrix)
 # Visualize correlations
 library(corrplot)
 corrplot(cor_matrix, method = "circle", main = "Correlation Matrix")
+
+# Pairwise scatterplots for key numerical variables
+pairs(numerical_vars, main = "Pairwise Scatterplots")
+```
+
+```{r}
+# Boxplot to examine relationship between a numerical variable and Status
+boxplot(balance_data$tumor_size ~ balance_data$status, main = "Tumor Size by Status", xlab = "Status", ylab = "Tumor Size")
+
+# Barplot for categorical variables vs. Status
+for (col in colnames(categorical_vars)) {
+  table_by_status <- table(balance_data[[col]], balance_data$status)
+  barplot(table_by_status, beside = TRUE, main = paste(col, "by Status"), col = c("lightblue", "pink"))
+}
 ```
 
 
+
 ```{r}
-
-
 # Logistic Regression Full Model
 logit_model_balance <- glm(status ~ ., data = balance_data, family = binomial())
 
@@ -253,5 +266,31 @@ logLik(logit_bic)
 predictions_bic <- predict(logit_bic, type = "response")
 data$predicted_classes_bic <- ifelse(predictions_bic > 0.5, 1, 0)
 confusionMatrix(as.factor(data$predicted_classes_bic), as.factor(data$Status))
+```
+
+
+```{r}
+#Model Selection and Justification
+logLik(logit_aic)
+logLik(logit_bic)
+
+#Confusion Matrix:
+predictions_aic <- predict(logit_aic, type = "response")
+balance_data$predicted_classes_aic <- ifelse(predictions_aic > 0.5, 1, 0)
+confusionMatrix(as.factor(balance_data$predicted_classes_aic), as.factor(balance_data$Status))
+
+
+predictions_bic <- predict(logit_bic, type = "response")
+balance_data$predicted_classes_bic <- ifelse(predictions_bic > 0.5, 1, 0)
+confusionMatrix(as.factor(balance_data$predicted_classes_bic), as.factor(balance_data$Status))
+
+##AUC-ROC:
+library(pROC)
+roc_curve_aic <- roc(balance_data$Status, predictions_aic)
+roc_curve_bic <- roc(balance_data$Status, predictions_bic)
+plot(roc_curve_aic, col = "blue", main = "ROC Curve for AIC and BIC Models")
+lines(roc_curve_bic, col = "red")
+auc(roc_curve_aic)
+auc(roc_curve_bic)
 ```
 
