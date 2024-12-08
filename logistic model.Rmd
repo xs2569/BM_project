@@ -214,82 +214,119 @@ summary(logit_model_balance)
 predictions <- predict(logit_model_balance, type = "response")
 
 # Classify Predictions
-data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+balance_data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Ensure consistent factor levels
+balance_data$predicted_classes <- factor(balance_data$predicted_classes, levels = c(0, 1))
+balance_data$status <- factor(balance_data$status, levels = c(0, 1))
 
 # Confusion Matrix
-confusionMatrix(as.factor(data$predicted_classes), as.factor(data$Status))
-
+confusionMatrix(balance_data$predicted_classes, balance_data$status)
 
 # Variance Inflation Factor (VIF) to detect multicollinearity
-vif(logit_model_balance)
+library(car)
+#vif(logit_model_balance)
 
 # Correlation Matrix
-cor_matrix <- cor(data[, sapply(data, is.numeric)])
+cor_matrix <- cor(balance_data[, sapply(balance_data, is.numeric)], use = "complete.obs")
 print(cor_matrix)
-
 
 # Log-Likelihood of the Full Model
 logLik(logit_model_balance)
 
 # Diagnostic Plots
+par(mfrow = c(2, 2))
 plot(logit_model_balance)
+par(mfrow = c(1, 1))  # Reset graphical parameters
 ```
 
 ```{r}
 # Stepwise Selection using AIC
 logit_aic <- stepAIC(logit_model, trace = 0, k = 2)
 
-# Final AIC Model
+# Final AIC Model Summary
 summary(logit_aic)
 
 # Log-Likelihood and VIF
 logLik(logit_aic)
+library(car)
 vif(logit_aic)
 
-# Predictions and Confusion Matrix
+# Predictions
 predictions_aic <- predict(logit_aic, type = "response")
+
+# Classify Predictions
 data$predicted_classes_aic <- ifelse(predictions_aic > 0.5, 1, 0)
-confusionMatrix(as.factor(data$predicted_classes_aic), as.factor(data$Status))
+
+# Ensure factors with consistent levels
+data$predicted_classes_aic <- factor(data$predicted_classes_aic, levels = c(0, 1))
+data$status <- factor(data$status, levels = c(0, 1))
+
+# Confusion Matrix
+library(caret)
+confusionMatrix(data$predicted_classes_aic, data$status)
 ```
 
 ```{r}
 # Stepwise Selection using BIC
 logit_bic <- stepAIC(logit_model, trace = 0, k = log(nrow(data)))
 
-# Final BIC Model
+# Final BIC Model Summary
 summary(logit_bic)
 
 # Log-Likelihood
 logLik(logit_bic)
 
-# Predictions and Confusion Matrix
+# Predictions
 predictions_bic <- predict(logit_bic, type = "response")
+
+# Classify Predictions
 data$predicted_classes_bic <- ifelse(predictions_bic > 0.5, 1, 0)
-confusionMatrix(as.factor(data$predicted_classes_bic), as.factor(data$Status))
+
+# Ensure factors with consistent levels
+data$predicted_classes_bic <- factor(data$predicted_classes_bic, levels = c(0, 1))
+data$Status <- factor(data$Status, levels = c(0, 1))
+
+# Confusion Matrix
+library(caret)
+confusionMatrix(data$predicted_classes_bic, data$Status)
 ```
 
 
 ```{r}
-#Model Selection and Justification
+# Log-Likelihood for AIC and BIC Models
 logLik(logit_aic)
 logLik(logit_bic)
 
-#Confusion Matrix:
+# Predictions and Classification for AIC Model
 predictions_aic <- predict(logit_aic, type = "response")
 balance_data$predicted_classes_aic <- ifelse(predictions_aic > 0.5, 1, 0)
-confusionMatrix(as.factor(balance_data$predicted_classes_aic), as.factor(balance_data$Status))
 
-
+# Predictions and Classification for BIC Model
 predictions_bic <- predict(logit_bic, type = "response")
 balance_data$predicted_classes_bic <- ifelse(predictions_bic > 0.5, 1, 0)
-confusionMatrix(as.factor(balance_data$predicted_classes_bic), as.factor(balance_data$Status))
 
-##AUC-ROC:
+# Ensure consistent factor levels for both AIC and BIC
+balance_data$predicted_classes_aic <- factor(balance_data$predicted_classes_aic, levels = c(0, 1))
+balance_data$predicted_classes_bic <- factor(balance_data$predicted_classes_bic, levels = c(0, 1))
+balance_data$Status <- factor(balance_data$status, levels = c(0, 1))
+
+# Confusion Matrices
+library(caret)
+confusionMatrix(balance_data$predicted_classes_aic, balance_data$status)
+confusionMatrix(balance_data$predicted_classes_bic, balance_data$status)
+
+# AUC-ROC for AIC and BIC Models
 library(pROC)
-roc_curve_aic <- roc(balance_data$Status, predictions_aic)
-roc_curve_bic <- roc(balance_data$Status, predictions_bic)
-plot(roc_curve_aic, col = "blue", main = "ROC Curve for AIC and BIC Models")
-lines(roc_curve_bic, col = "red")
+roc_curve_aic <- roc(as.numeric(as.character(balance_data$Status)), predictions_aic)
+roc_curve_bic <- roc(as.numeric(as.character(balance_data$Status)), predictions_bic)
+
+# Plot ROC Curves
+plot(roc_curve_aic, col = "blue", main = "ROC Curve for AIC and BIC Models", lwd = 2)
+lines(roc_curve_bic, col = "red", lwd = 2)
+legend("bottomright", legend = c("AIC", "BIC"), col = c("blue", "red"), lwd = 2)
+
+# AUC for AIC and BIC Models
 auc(roc_curve_aic)
 auc(roc_curve_bic)
 ```
