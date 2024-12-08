@@ -90,7 +90,7 @@ chart.Correlation(cortable, histogram=TRUE, pch=19)
 ```
 We have to choice 1 between 
 t_stage - tumor size
-n stage - regional_node_possitive
+n stage - regional_node_positive
 
 ```{r Multicollinearity continuous}
 muldata = project_2_numdata
@@ -112,6 +112,7 @@ cox_model1 <- coxph(Surv(survival_months, status) ~.,
                    data = final)
 vifs <- vif(cox_model1)
 print(vifs)
+summary(cox_model)
 ```
 ```{r phtest}
 ph_test <- cox.zph(cox_model1)
@@ -125,22 +126,21 @@ The Cox model assumes that hazard ratios are constant over time. A non-significa
 ```{r model2}
 
 cox_model2 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            tumor_size + regional_node_examined + Married,
+                            tumor_size + regional_node_examined + a_stage_regional+Married,
                             data = final,x = TRUE)
 summary(cox_model2)
 ```
-
 
 ```{r}
 ph_test <- cox.zph(cox_model2)
 print(ph_test)
 plot(ph_test) 
 ```
-now the assumption is been fully achieved 
+now the assumption is been fully achieved after delete estrogen_status and progesterone_status
 
 ```{r model3}
 cox_model3 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            log2(tumor_size+1) + log2(regional_node_examined+1) + Married,
+                            log2(tumor_size+1) + log2(regional_node_examined+1)                                            +a_stage_regional + Married,
                             data = final)
 summary(cox_model3)
 ```
@@ -148,26 +148,30 @@ Add log transformation to the tumor size and regional node_examined, now they ar
 
 ```{r model4}
 cox_model4 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            log2(tumor_size+1) + log2(regional_node_examined+1) + Married +                                  Married*log2(regional_node_examined+1),
+                            log2(tumor_size+1) + log2(regional_node_examined+1) +                                          +a_stage_regional+ Married + Married*log2(regional_node_examined+1),
                             data = final)
 summary(cox_model4)
 ```
-
+Noticing married seems insignificant in every variable, we tried to add interaction term with married and all the remaining variables, but the interaction term are all insignificant as well as the main marriage effect except for the interaction between married and log2(regional_node_examined) make the married main effect being statisticlally significant under 0.05 level
 
 
 ```{r model5}
 cox_model5 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            log2(tumor_size+1) + log2(regional_node_examined+1),
+                            log2(tumor_size+1) + log2(regional_node_examined+1)+ a_stage_regional,
                             data = final)
 summary(cox_model5)
 ```
+Since the interaction term gives no significant significant value, we directly drop the marriage variable
+
+
+
 ```{r}
 cox_model6 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
                             log2(regional_node_examined+1),
                             data = final)
 summary(cox_model6)
 ```
-
+further drop variables tumor_size and a_stage_regional due to quite low significant value.
 
 
 Model Evaluation
@@ -218,10 +222,10 @@ cox_model6$concordance
 
 Concordance:
 model1 69.4
-model2 66.9
+model2 67.0
 model3 67.2
-model4 67.3 (overall account for meeting the model assumption and the multicollinearity, model 4 have the highest concordance score, although accompanied with "married" variable that is not statistically significant)
-model5 66.9
+model4 69.6 (overall account for meeting the model assumption and the multicollinearity, model 4 have the highest concordance score, although accompanied with "married" variable that is not statistically significant)
+model5 67.0
 model6 66.8
 
 ```{r outliers}
