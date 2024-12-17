@@ -178,6 +178,9 @@ for (col in colnames(categorical_vars)) {
 ```
 
 ```{r}
+
+library(GGally)
+
 # Correlation matrix
 cor_matrix <- cor(balance_data[, sapply(balance_data, is.numeric)], use = "complete.obs")
 print(cor_matrix)
@@ -188,6 +191,12 @@ corrplot(cor_matrix, method = "circle", main = "Correlation Matrix")
 
 # Pairwise scatterplots for key numerical variables
 pairs(numerical_vars, main = "Pairwise Scatterplots")
+
+ggpairs(numerical_vars, 
+        title = "Pairwise Scatterplots for Numerical Variables",
+        upper = list(continuous = wrap("cor", size = 4)), # Add correlation in upper triangle
+        lower = list(continuous = "smooth"),             # Scatterplot with smooth line
+        diag = list(continuous = "densityDiag"))         # Density plot on diagonal
 ```
 
 ```{r}
