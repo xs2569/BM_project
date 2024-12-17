@@ -340,3 +340,85 @@ auc(roc_curve_aic)
 auc(roc_curve_bic)
 ```
 
+## Interaction models
+```{r} 
+library(glmnet)
+
+# Load required libraries
+library(MASS)
+
+# Ensure data types are appropriate
+balance_data$status <- as.factor(balance_data$status)
+
+# Generate all two-way interactions
+formula_with_interactions <- status ~ (age + tumor_size + estrogen_status + 
+                                       progesterone_status + regional_node_examined + 
+                                       reginol_node_positive + t_stage + differentiate)^2
+
+# Fit the full model with all two-way interactions
+full_model <- glm(formula_with_interactions, data = balance_data, family = binomial())
+
+# Perform Stepwise Selection (both directions: forward and backward) using AIC
+aic_model <- stepAIC(full_model, direction = "both", trace = FALSE)
+
+# Summary of the final selected model
+summary(aic_model)
+
+
+
+# Stepwise selection using BIC
+bic_model <- stepAIC(full_model, direction = "both", trace = FALSE, k = log(nrow(balance_data)))
+
+# Summary of the final BIC model
+summary(bic_model)
+
+
+```
+```{r}
+# Extract AIC Model Coefficients
+aic_summary <- summary(aic_model)
+aic_coef <- as.data.frame(aic_summary$coefficients)
+aic_coef$Term <- rownames(aic_coef)  # Add variable names
+aic_coef$Model <- "AIC"  # Add model identifier
+colnames(aic_coef) <- c("AIC_Estimate", "AIC_Std.Error", "AIC_z.Value", "AIC_P.Value", "Term", "Model")
+
+# Extract BIC Model Coefficients
+bic_summary <- summary(bic_model)
+bic_coef <- as.data.frame(bic_summary$coefficients)
+bic_coef$Term <- rownames(bic_coef)
+bic_coef$Model <- "BIC"
+colnames(bic_coef) <- c("BIC_Estimate", "BIC_Std.Error", "BIC_z.Value", "BIC_P.Value", "Term", "Model")
+
+# Merge AIC and BIC Results by Term
+comparison_table <- merge(
+  aic_coef[, c("Term", "AIC_Estimate", "AIC_Std.Error", "AIC_z.Value", "AIC_P.Value")],
+  bic_coef[, c("Term", "BIC_Estimate", "BIC_Std.Error", "BIC_z.Value", "BIC_P.Value")],
+  by = "Term", 
+  all = TRUE
+)
+
+# Replace NA with 0 for consistency (optional)
+comparison_table[is.na(comparison_table)] <- 0
+
+# Rearrange Columns for Better Display
+comparison_table <- comparison_table[, c("Term", 
+                                         "AIC_Estimate", "AIC_Std.Error", "AIC_z.Value", "AIC_P.Value",
+                                         "BIC_Estimate", "BIC_Std.Error", "BIC_z.Value", "BIC_P.Value")]
+
+# Sort Table by Term
+comparison_table <- comparison_table[order(comparison_table$Term), ]
+
+# Display the Comparison Table
+print(comparison_table)
+
+# Load required libraries
+library(writexl)  # For writing Excel files
+
+# Export the comparison table to an Excel file
+write_xlsx(comparison_table, "aic_bic_comparison.xlsx")
+
+# Confirm Export
+cat("The comparison table has been successfully written to 'aic_bic_comparison.xlsx'")
+
+
+```
