@@ -1,0 +1,245 @@
+---
+title: "Survival Models_improved"
+output: html_document
+date: "2024-12-04"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(survival)
+library(car)
+library(ggplot2)
+library(PerformanceAnalytics)
+```
+
+
+```{r data}
+set.seed(1)
+project_2_data = 
+  read_csv("project_2_data.csv", na = c("NA", "", ".")) |>
+  janitor::clean_names()  |>
+  mutate(status = ifelse(status == "Dead", 1, 0))
+      
+
+dead <- project_2_data |>
+  filter(status == 1)
+
+alive <- project_2_data |>
+  filter(status == 0) |>
+  sample_n(nrow(dead))
+
+project_2_numdata<-
+  bind_rows(dead, alive) |>
+  mutate(
+    t_stage = case_when(
+    t_stage == "T1" ~ 1,
+    t_stage == "T2" ~ 2,
+    t_stage == "T3" ~ 3,
+    t_stage == "T4" ~ 4,
+    TRUE ~ NA_real_),
+    n_stage = case_when(
+    n_stage == "N1" ~ 1,
+    n_stage == "N2" ~ 2,
+    n_stage == "N3" ~ 3,
+    TRUE ~ NA_real_),
+    differentiate = case_when(
+    differentiate == "Well differentiated" ~ 1,
+    differentiate == "Moderately differentiated" ~ 2,
+    differentiate == "Poorly differentiated" ~ 3,
+    differentiate == "Undifferentiated" ~ 4,
+    TRUE ~ NA_real_),
+    grade = case_when(
+    grade == "anaplastic; Grade IV" ~ 4,
+    grade == "3" ~ 3,
+    grade == "2" ~ 2,
+    grade == "1" ~ 1,
+    TRUE ~ NA_real_),
+    a_stage_regional = ifelse(a_stage == "Regional", 1, 0),
+    estrogen_status = ifelse(estrogen_status == "Positive", 1, 0),
+    progesterone_status = ifelse(progesterone_status == "Positive", 1, 0)
+    ) |>
+  select(-a_stage)
+```
+
+```{r variable selection}
+variables <- names(project_2_numdata)[!names(project_2_numdata) %in% c("survival_months", "status")]
+for (var in variables) {
+  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
+  model <- coxph(formula, data = project_2_numdata)
+  print(var)
+  print(summary(model))
+}
+```
+
+All variables are statistically significant except for marriage in "marital_status" 
+
+```{r Multicollinearity}
+project_2_numdata <-
+  project_2_numdata|>
+  mutate(Married = ifelse(marital_status == "Married", 1, 0)) |>
+  select(-differentiate, - marital_status)
+
+cor_matrix <- cor(project_2_numdata[, sapply(project_2_numdata, is.numeric)])
+print(cor_matrix)
+
+
+cortable<-project_2_numdata|>
+  select(-race,-x6th_stage)
+cortable$regional_node_examined
+chart.Correlation(cortable, histogram=TRUE, pch=19)
+```
+We have to choice 1 between 
+t_stage - tumor size
+n stage - regional_node_positive
+
+```{r Multicollinearity continuous}
+muldata = project_2_numdata
+  
+  
+cox_model <- coxph(Surv(survival_months, status) ~.,
+                   data = muldata)
+
+vifs <- vif(cox_model)  
+print(vifs)
+```
+remove t-stage，n_stage and regional_mode_positive due to higher VIF score
+
+```{r final data account for multicolliinearity}
+final = muldata |>
+  select(-t_stage, -n_stage,-reginol_node_positive)
+  
+cox_model1 <- coxph(Surv(survival_months, status) ~.,
+                   data = final)
+vifs <- vif(cox_model1)
+print(vifs)
+summary(cox_model)
+```
+```{r phtest}
+ph_test <- cox.zph(cox_model1)
+print(ph_test)
+plot(ph_test) 
+```
+
+The Cox model assumes that hazard ratios are constant over time. A non-significant p-value (p > 0.05) indicates that the PH assumption holds. As GLOBAL 47.176 15 1.8e-05, the model did not meet the assumption, as same as estrogen_status and progesterone_status.We need further improve our model.
+
+
+```{r model2}
+
+cox_model2 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            tumor_size + regional_node_examined + a_stage_regional+Married,
+                            data = final,x = TRUE)
+summary(cox_model2)
+```
+
+```{r}
+ph_test <- cox.zph(cox_model2)
+print(ph_test)
+plot(ph_test) 
+```
+now the assumption is been fully achieved after delete estrogen_status and progesterone_status
+
+```{r model3}
+cox_model3 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(tumor_size+1) + log2(regional_node_examined+1)                                            +a_stage_regional + Married,
+                            data = final)
+summary(cox_model3)
+```
+Add log transformation to the tumor size and regional node_examined, now they are being statistically significant
+
+```{r model4}
+cox_model4 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(tumor_size+1) + log2(regional_node_examined+1) +                                          +a_stage_regional+ Married + Married*log2(regional_node_examined+1),
+                            data = final)
+summary(cox_model4)
+```
+Noticing married seems insignificant in every variable, we tried to add interaction term with married and all the remaining variables, but the interaction term are all insignificant as well as the main marriage effect except for the interaction between married and log2(regional_node_examined) make the married main effect being statisticlally significant under 0.05 level
+
+
+```{r model5}
+cox_model5 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(tumor_size+1) + log2(regional_node_examined+1)+ a_stage_regional,
+                            data = final)
+summary(cox_model5)
+```
+Since the interaction term gives no significant significant value, we directly drop the marriage variable
+
+
+
+```{r}
+cox_model6 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(regional_node_examined+1),
+                            data = final)
+summary(cox_model6)
+```
+further drop variables tumor_size and a_stage_regional due to quite low significant value.
+
+
+Model Evaluation
+```{r}
+summary(final$survival_months)
+```
+
+
+```{r}
+library(timeROC)
+cox_models <- list(cox_model1, cox_model2, cox_model3, cox_model4, cox_model5, cox_model6)
+
+time_points <- c(2,43,62,82,107)
+
+dynamic_auc_results <- list()
+
+for (i in 1:length(cox_models)) {
+  
+  current_model <- cox_models[[i]]
+  time_roc <- timeROC(T = final$survival_months, 
+                    delta = final$status, 
+                    marker = predict(current_model, type = "lp"), 
+                    cause = 1,  # Event of interest
+                    times = time_points,  # Time points
+                    iid = TRUE)
+
+  
+  dynamic_auc_results[[paste0("Model_", i)]] <- time_roc$AUC
+  
+  print(paste("AUC for Model", i, "at time points:", paste(time_points, collapse = ", ")))
+  print(round(time_roc$AUC, 3))
+}
+```
+model 4 tends to have a relatively higher AUC throughout different time points
+
+
+
+C-index
+```{r}
+cox_model1$concordance
+cox_model2$concordance
+cox_model3$concordance
+cox_model4$concordance
+cox_model5$concordance
+cox_model6$concordance
+```
+
+
+Concordance:
+model1 69.4
+model2 67.0
+model3 67.2
+model4 69.6 (overall account for meeting the model assumption and the multicollinearity, model 4 have the highest concordance score, although accompanied with "married" variable that is not statistically significant)
+model5 67.0
+model6 66.8
+
+```{r outliers}
+dev_residuals <- residuals(cox_model4, type = "deviance")
+plot(dev_residuals, main = "Deviance Residuals", ylab = "Residuals", xlab = "Index")
+abline(h = c(-2, 2), col = "red", lty = 2) 
+
+surv_fit <- survfit(Surv(survival_months, status) ~ 1, data = final)
+
+plot(surv_fit, xlab = "Time (months)", ylab = "Survival Probability", 
+     main = "Survival Curve for the Final Model", col = "blue", lwd = 2)
+
+grid()
+```
+
+
+
