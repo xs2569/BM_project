@@ -16,7 +16,7 @@ library(PerformanceAnalytics)
 ```{r data}
 set.seed(1)
 project_2_data = 
-  read_csv("project_2_data.csv", na = c("NA", "", ".")) |>
+  read_csv("data/project_2_data.csv", na = c("NA", "", ".")) |>
   janitor::clean_names()  |>
   mutate(status = ifelse(status == "Dead", 1, 0))
       
@@ -114,6 +114,32 @@ vifs <- vif(cox_model1)
 print(vifs)
 summary(cox_model)
 ```
+```{r forward }
+nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = final)
+fullmodel <- coxph(Surv(survival_months, status) ~ ., data = final)
+
+forward_model <- step(nullmodel,
+                      scope = list(lower = nullmodel, upper = fullmodel),
+                      direction = "forward",
+                      trace = TRUE)
+forward_model
+```
+```{r backward }
+backward_model <- step(fullmodel,
+                       direction = "backward",
+                       trace = TRUE) 
+backward_model
+```
+```{r stepwise }
+stepwise_model <- step(nullmodel,
+                       scope = list(lower = nullmodel, upper = final),
+                       direction = "both",
+                       trace = TRUE)
+
+stepwise_model
+```
+
+
 ```{r phtest}
 ph_test <- cox.zph(cox_model1)
 print(ph_test)
@@ -170,7 +196,20 @@ cox_model6 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + gr
                             log2(regional_node_examined+1),
                             data = final)
 summary(cox_model6)
+
+
+test_ph <- cox.zph(cox_model5)
+print(test_ph)
+plot(test_ph)
+
+library(survival)
+dfbetas_cox <- dfbeta(coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade +
+                            log2(tumor_size + 1) + log2(regional_node_examined + 1) + a_stage_regional, 
+                            data = final))
+plot(dfbetas_cox, main="DFBETAs for each Covariate in the Cox Model")
+
 ```
+
 further drop variables tumor_size and a_stage_regional due to quite low significant value.
 
 
