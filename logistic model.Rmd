@@ -356,6 +356,32 @@ balance_data_dummies <- dummy_cols(
 # View the updated dataset
 head(balance_data_dummies)
 ```
+解释一下在干什么
+```{r}
+# Start with main effects only
+formula_main_effects <- status ~ 
+  age + grade + tumor_size + estrogen_status + progesterone_status + 
+  regional_node_examined + reginol_node_positive + 
+  marital_status_Single + marital_status_Widowed + marital_status_Separated + 
+  x6th_stage_IIB + x6th_stage_IIIA + x6th_stage_IIIB + x6th_stage_IIIC + 
+  a_stage_regional
+
+# Fit main effects model
+main_effects_model <- glm(formula_main_effects, data = balance_data_dummies, family = binomial())
+summary(main_effects_model)
+
+# Add interaction terms incrementally
+interaction_terms <- c("age:grade", "tumor_size:estrogen_status", 
+                       "progesterone_status:regional_node_examined", 
+                       "marital_status_Single:reginol_node_positive")
+
+for (term in interaction_terms) {
+  formula_with_term <- as.formula(paste(deparse(formula_main_effects), "+", term))
+  model <- glm(formula_with_term, data = balance_data_dummies, family = binomial())
+  cat("\nAdding term:", term, "\n")
+  print(summary(model))
+}
+```
 
 
 ```{r} 
@@ -364,30 +390,36 @@ library(glmnet)
 # Load required libraries
 library(MASS)
 
-# Ensure data types are appropriate
-balance_data$status <- as.factor(balance_data$status)
-balance_data$race <- as.factor(balance_data$race)
-balance_data$marital_status <- as.factor(balance_data$marital_status)
-balance_data$x6th_stage <- as.factor(balance_data$x6th_stage)
-balance_data$a_stage <- as.factor(balance_data$a_stage)
+
 
 
 # Generate all two-way interactions
-formula_with_interactions <- status ~ (age + marital_status + grade +  tumor_size + estrogen_status + progesterone_status + regional_node_examined + reginol_node_positive)^2 
+formula_with_interactions <- status ~ 
+  (age + grade + tumor_size + estrogen_status + progesterone_status + 
+   regional_node_examined + reginol_node_positive + 
+   marital_status_Single + marital_status_Widowed + marital_status_Separated + 
+   x6th_stage_IIB + x6th_stage_IIIA + x6th_stage_IIIB + x6th_stage_IIIC + 
+   a_stage_regional)
+# Fit the logistic regression model with the updated formula
+interaction_model <- glm(formula_with_interactions, data = balance_data_dummies, family = binomial())
 
-# Fit the full model with all two-way interactions
-full_model <- glm(formula_with_interactions, data = balance_data, family = binomial())
+# View the summary of the model
+summary(interaction_model)
+```
 
+```{r}
 
 # Perform Stepwise Selection (AIC)
-aic_forward_model <- stepAIC(full_model, direction = "forward", trace = FALSE)
-aic_backward_model <- stepAIC(full_model, direction = "backward", trace = FALSE)
-aic_both_model <- stepAIC(full_model, direction = "both", trace = FALSE)
+aic_forward_model <- stepAIC(interaction_model, direction = "forward", trace = FALSE)
+aic_backward_model <- stepAIC(interaction_model, direction = "backward", trace = FALSE)
+aic_both_model <- stepAIC(interaction_model, direction = "both", trace = FALSE)
 
 # Perform Stepwise Selection (BIC)
-bic_forward_model <- stepAIC(full_model, direction = "forward", trace = FALSE, k = log(nrow(balance_data)))
-bic_backward_model <- stepAIC(full_model, direction = "backward", trace = FALSE, k = log(nrow(balance_data)))
-bic_both_model <- stepAIC(full_model, direction = "both", trace = FALSE, k = log(nrow(balance_data)))
+bic_forward_model <- stepAIC(interaction_model, direction = "forward", trace = FALSE, k = log(nrow(balance_data)))
+bic_backward_model <- stepAIC(interaction_model, direction = "backward", trace = FALSE, k = log(nrow(balance_data)))
+bic_both_model <- stepAIC(interaction_model, direction = "both", trace = FALSE, k = log(nrow(balance_data)))
+
+
 ```
 
 ```{r}
@@ -441,60 +473,13 @@ comparison_table <- merge(aic_combined, bic_combined, by = "Term", all = TRUE)
 comparison_table[is.na(comparison_table)] <- 0
 
 # Export the Comparison Table to Excel
-#write_xlsx(comparison_table, "aic_bic_stepwise_comparison.xlsx")
+write_xlsx(comparison_table, "aic_bic_stepwise_comparison.xlsx")
 
 # Confirm Export
 cat("The stepwise comparison table has been successfully written to 'aic_bic_stepwise_comparison.xlsx'")
 
 ```
-```{r}
-# Extract AIC Model Coefficients
-aic_summary <- summary(aic_model)
-aic_coef <- as.data.frame(aic_summary$coefficients)
-aic_coef$Term <- rownames(aic_coef)  # Add variable names
-aic_coef$Model <- "AIC"  # Add model identifier
-colnames(aic_coef) <- c("AIC_Estimate", "AIC_Std.Error", "AIC_z.Value", "AIC_P.Value", "Term", "Model")
 
-# Extract BIC Model Coefficients
-bic_summary <- summary(bic_model)
-bic_coef <- as.data.frame(bic_summary$coefficients)
-bic_coef$Term <- rownames(bic_coef)
-bic_coef$Model <- "BIC"
-colnames(bic_coef) <- c("BIC_Estimate", "BIC_Std.Error", "BIC_z.Value", "BIC_P.Value", "Term", "Model")
-
-# Merge AIC and BIC Results by Term
-comparison_table <- merge(
-  aic_coef[, c("Term", "AIC_Estimate", "AIC_Std.Error", "AIC_z.Value", "AIC_P.Value")],
-  bic_coef[, c("Term", "BIC_Estimate", "BIC_Std.Error", "BIC_z.Value", "BIC_P.Value")],
-  by = "Term", 
-  all = TRUE
-)
-
-# Replace NA with 0 for consistency (optional)
-comparison_table[is.na(comparison_table)] <- 0
-
-# Rearrange Columns for Better Display
-comparison_table <- comparison_table[, c("Term", 
-                                         "AIC_Estimate", "AIC_Std.Error", "AIC_z.Value", "AIC_P.Value",
-                                         "BIC_Estimate", "BIC_Std.Error", "BIC_z.Value", "BIC_P.Value")]
-
-# Sort Table by Term
-comparison_table <- comparison_table[order(comparison_table$Term), ]
-
-# Display the Comparison Table
-print(comparison_table)
-
-# Load required libraries
-library(writexl)  # For writing Excel files
-
-# Export the comparison table to an Excel file
-#write_xlsx(comparison_table, "aic_bic_comparison.xlsx")
-
-# Confirm Export
-cat("The comparison table has been successfully written to 'aic_bic_comparison.xlsx'")
-
-
-```
 
 ```{r}
 
