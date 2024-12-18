@@ -358,20 +358,71 @@ formula_with_interactions <- status ~ (age + tumor_size + estrogen_status +
 # Fit the full model with all two-way interactions
 full_model <- glm(formula_with_interactions, data = balance_data, family = binomial())
 
-# Perform Stepwise Selection (both directions: forward and backward) using AIC
-aic_model <- stepAIC(full_model, direction = "both", trace = FALSE)
 
-# Summary of the final selected model
-summary(aic_model)
+# Perform Stepwise Selection (AIC)
+aic_forward_model <- stepAIC(full_model, direction = "forward", trace = FALSE)
+aic_backward_model <- stepAIC(full_model, direction = "backward", trace = FALSE)
+aic_both_model <- stepAIC(full_model, direction = "both", trace = FALSE)
 
+# Perform Stepwise Selection (BIC)
+bic_forward_model <- stepAIC(full_model, direction = "forward", trace = FALSE, k = log(nrow(balance_data)))
+bic_backward_model <- stepAIC(full_model, direction = "backward", trace = FALSE, k = log(nrow(balance_data)))
+bic_both_model <- stepAIC(full_model, direction = "both", trace = FALSE, k = log(nrow(balance_data)))
 
+# Extract Coefficients for All Models
+extract_coefficients <- function(model, model_name) {
+  summary <- summary(model)
+  coef <- as.data.frame(summary$coefficients)
+  coef$Term <- rownames(coef)
+  coef$Model <- model_name
+  return(coef)
+}
 
-# Stepwise selection using BIC
-bic_model <- stepAIC(full_model, direction = "both", trace = FALSE, k = log(nrow(balance_data)))
+# Create Coefficient Tables
+aic_forward_coef <- extract_coefficients(aic_forward_model, "AIC Forward")
+aic_backward_coef <- extract_coefficients(aic_backward_model, "AIC Backward")
+aic_both_coef <- extract_coefficients(aic_both_model, "AIC Both")
+bic_forward_coef <- extract_coefficients(bic_forward_model, "BIC Forward")
+bic_backward_coef <- extract_coefficients(bic_backward_model, "BIC Backward")
+bic_both_coef <- extract_coefficients(bic_both_model, "BIC Both")
 
-# Summary of the final BIC model
-summary(bic_model)
+# Merge Results for AIC Models
+aic_combined <- merge(
+  aic_forward_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  aic_backward_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  by = "Term", all = TRUE, suffixes = c("_AIC_Forward", "_AIC_Backward")
+)
+aic_combined <- merge(
+  aic_combined,
+  aic_both_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  by = "Term", all = TRUE
+)
+colnames(aic_combined)[5:8] <- paste0(colnames(aic_combined)[5:8], "_AIC_Both")
 
+# Merge Results for BIC Models
+bic_combined <- merge(
+  bic_forward_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  bic_backward_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  by = "Term", all = TRUE, suffixes = c("_BIC_Forward", "_BIC_Backward")
+)
+bic_combined <- merge(
+  bic_combined,
+  bic_both_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  by = "Term", all = TRUE
+)
+colnames(bic_combined)[5:8] <- paste0(colnames(bic_combined)[5:8], "_BIC_Both")
+
+# Combine AIC and BIC Results
+comparison_table <- merge(aic_combined, bic_combined, by = "Term", all = TRUE)
+
+# Replace NA with 0 for consistency (optional)
+comparison_table[is.na(comparison_table)] <- 0
+
+# Export the Comparison Table to Excel
+write_xlsx(comparison_table, "aic_bic_stepwise_comparison.xlsx")
+
+# Confirm Export
+cat("The stepwise comparison table has been successfully written to 'aic_bic_stepwise_comparison.xlsx'")
 
 ```
 ```{r}
@@ -415,10 +466,62 @@ print(comparison_table)
 library(writexl)  # For writing Excel files
 
 # Export the comparison table to an Excel file
-write_xlsx(comparison_table, "aic_bic_comparison.xlsx")
+#write_xlsx(comparison_table, "aic_bic_comparison.xlsx")
 
 # Confirm Export
 cat("The comparison table has been successfully written to 'aic_bic_comparison.xlsx'")
 
 
 ```
+
+```{r}
+# Log-Likelihood for AIC and BIC Models
+logLik_aic <- logLik(aic_model)
+logLik_bic <- logLik(bic_model)
+
+cat("Log-Likelihood for AIC Model:", logLik_aic, "\n")
+cat("Log-Likelihood for BIC Model:", logLik_bic, "\n")
+
+# Predictions and Classification for AIC Model
+predictions_aic <- predict(aic_model, type = "response")
+balance_data$predicted_classes_aic <- ifelse(predictions_aic > 0.5, 1, 0)
+
+# Predictions and Classification for BIC Model
+predictions_bic <- predict(bic_model, type = "response")
+balance_data$predicted_classes_bic <- ifelse(predictions_bic > 0.5, 1, 0)
+
+# Ensure consistent factor levels for both AIC and BIC
+balance_data$predicted_classes_aic <- factor(balance_data$predicted_classes_aic, levels = c(0, 1))
+balance_data$predicted_classes_bic <- factor(balance_data$predicted_classes_bic, levels = c(0, 1))
+balance_data$status <- factor(balance_data$status, levels = c(0, 1))
+
+# Confusion Matrices
+library(caret)
+conf_matrix_aic <- confusionMatrix(balance_data$predicted_classes_aic, balance_data$status)
+conf_matrix_bic <- confusionMatrix(balance_data$predicted_classes_bic, balance_data$status)
+
+cat("Confusion Matrix for AIC Model:\n")
+print(conf_matrix_aic)
+
+cat("Confusion Matrix for BIC Model:\n")
+print(conf_matrix_bic)
+
+# AUC-ROC for AIC and BIC Models
+library(pROC)
+roc_curve_aic <- roc(as.numeric(as.character(balance_data$status)), predictions_aic)
+roc_curve_bic <- roc(as.numeric(as.character(balance_data$status)), predictions_bic)
+
+# Plot ROC Curves
+plot(roc_curve_aic, col = "blue", main = "ROC Curve for AIC and BIC Models", lwd = 2)
+lines(roc_curve_bic, col = "red", lwd = 2)
+legend("bottomright", legend = c("AIC", "BIC"), col = c("blue", "red"), lwd = 2)
+
+# AUC for AIC and BIC Models
+auc_aic <- auc(roc_curve_aic)
+auc_bic <- auc(roc_curve_bic)
+
+cat("AUC for AIC Model:", auc_aic, "\n")
+cat("AUC for BIC Model:", auc_bic, "\n")
+
+```
+
