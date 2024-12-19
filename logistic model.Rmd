@@ -511,9 +511,12 @@ legend("bottomright",
 ```{r}
 summary(bic_forward_model)
 ```
+
 ```{r}
 summary(bic_backward_model)
+plot(bic_backward_model)
 ```
+
 Evaluate the performance of your modells). ls your model achieving similar performancebetween the majority race group “White" and the minority “Black" (or “Black” + “Other")? lfnot, could you try to improve the fairness (i.e., reducing the gap of prediction performancebetween the majority and minority) of your model(s)?
 ```{r}
 library(caret)
