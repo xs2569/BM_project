@@ -509,7 +509,46 @@ legend("bottomright",
        lwd = 2)
 
 ```
+```{r}
+summary(bic_forward_model)
+```
+```{r}
+summary(bic_backward_model)
+```
+Evaluate the performance of your modells). ls your model achieving similar performancebetween the majority race group “White" and the minority “Black" (or “Black” + “Other")? lfnot, could you try to improve the fairness (i.e., reducing the gap of prediction performancebetween the majority and minority) of your model(s)?
+```{r}
+library(caret)
+library(pROC)
 
+# Assuming 'race' is your race variable and 'model' is your trained model
+evaluate_performance <- function(data, model, group_name) {
+  # Subset data
+  subset_data <- data[data$race == group_name, ]
+  
+  # Predictions
+  predictions <- predict(bic_backward_model, newdata = subset_data, type = "response")
+  predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+  
+  # Confusion Matrix
+  conf_matrix <- confusionMatrix(factor(predicted_classes), factor(subset_data$status))
+  print(paste("Confusion Matrix for", group_name))
+  print(conf_matrix)
+  
+  # AUC-ROC
+  roc_curve <- roc(subset_data$status, predictions)
+  auc_value <- auc(roc_curve)
+  print(paste("AUC for", group_name, ":", auc_value))
+}
+
+# Evaluate for 'White' group
+evaluate_performance(balance_data, bic_backward_model, "White")
+
+# Evaluate for 'Black' group
+evaluate_performance(balance_data, bic_backward_model, "Black")
+
+# Evaluate for 'Black' + 'Other' group
+evaluate_performance(balance_data, bic_backward_model, c("Black", "Other"))
+```
 
 
 
