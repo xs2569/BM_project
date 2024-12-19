@@ -390,16 +390,13 @@ library(glmnet)
 # Load required libraries
 library(MASS)
 
-
-
-
 # Generate all two-way interactions
 formula_with_interactions <- status ~ 
   (age + grade + tumor_size + estrogen_status + progesterone_status + 
-   regional_node_examined + reginol_node_positive + 
+   regional_node_examined + reginol_node_positive)^2+  + 
    marital_status_Single + marital_status_Widowed + marital_status_Separated + 
    x6th_stage_IIB + x6th_stage_IIIA + x6th_stage_IIIB + x6th_stage_IIIC + 
-   a_stage_regional)
+   a_stage_regional
 # Fit the logistic regression model with the updated formula
 interaction_model <- glm(formula_with_interactions, data = balance_data_dummies, family = binomial())
 
@@ -407,8 +404,8 @@ interaction_model <- glm(formula_with_interactions, data = balance_data_dummies,
 summary(interaction_model)
 ```
 
-```{r}
 
+```{r}
 # Perform Stepwise Selection (AIC)
 aic_forward_model <- stepAIC(interaction_model, direction = "forward", trace = FALSE)
 aic_backward_model <- stepAIC(interaction_model, direction = "backward", trace = FALSE)
@@ -510,6 +507,7 @@ evaluate_model <- function(model, data, model_name) {
   return(list(conf_matrix = conf_matrix, auc = auc_value, roc_curve = roc_curve))
 }
 
+
 # Evaluate Models
 cat("\n### Evaluating AIC Models ###\n")
 aic_forward_results <- evaluate_model(aic_forward_model, balance_data, "AIC Forward")
@@ -539,53 +537,6 @@ legend("bottomright",
 
 ```{r}
 
-# Log-Likelihood for AIC and BIC Models
-logLik_aic <- logLik(aic_model)
-logLik_bic <- logLik(bic_model)
-
-cat("Log-Likelihood for AIC Model:", logLik_aic, "\n")
-cat("Log-Likelihood for BIC Model:", logLik_bic, "\n")
-
-# Predictions and Classification for AIC Model
-predictions_aic <- predict(aic_model, type = "response")
-balance_data$predicted_classes_aic <- ifelse(predictions_aic > 0.5, 1, 0)
-
-# Predictions and Classification for BIC Model
-predictions_bic <- predict(bic_model, type = "response")
-balance_data$predicted_classes_bic <- ifelse(predictions_bic > 0.5, 1, 0)
-
-# Ensure consistent factor levels for both AIC and BIC
-balance_data$predicted_classes_aic <- factor(balance_data$predicted_classes_aic, levels = c(0, 1))
-balance_data$predicted_classes_bic <- factor(balance_data$predicted_classes_bic, levels = c(0, 1))
-balance_data$status <- factor(balance_data$status, levels = c(0, 1))
-
-# Confusion Matrices
-library(caret)
-conf_matrix_aic <- confusionMatrix(balance_data$predicted_classes_aic, balance_data$status)
-conf_matrix_bic <- confusionMatrix(balance_data$predicted_classes_bic, balance_data$status)
-
-cat("Confusion Matrix for AIC Model:\n")
-print(conf_matrix_aic)
-
-cat("Confusion Matrix for BIC Model:\n")
-print(conf_matrix_bic)
-
-# AUC-ROC for AIC and BIC Models
-library(pROC)
-roc_curve_aic <- roc(as.numeric(as.character(balance_data$status)), predictions_aic)
-roc_curve_bic <- roc(as.numeric(as.character(balance_data$status)), predictions_bic)
-
-# Plot ROC Curves
-plot(roc_curve_aic, col = "blue", main = "ROC Curve for AIC and BIC Models", lwd = 2)
-lines(roc_curve_bic, col = "red", lwd = 2)
-legend("bottomright", legend = c("AIC", "BIC"), col = c("blue", "red"), lwd = 2)
-
-# AUC for AIC and BIC Models
-auc_aic <- auc(roc_curve_aic)
-auc_bic <- auc(roc_curve_bic)
-
-cat("AUC for AIC Model:", auc_aic, "\n")
-cat("AUC for BIC Model:", auc_bic, "\n")
-
 ```
+
 
