@@ -340,7 +340,7 @@ auc(roc_curve_aic)
 auc(roc_curve_bic)
 ```
 
-## Interaction models
+## Interaction models!!!
 
 ```{r}
 library(fastDummies)
@@ -356,32 +356,7 @@ balance_data_dummies <- dummy_cols(
 # View the updated dataset
 head(balance_data_dummies)
 ```
-解释一下在干什么
-```{r}
-# Start with main effects only
-formula_main_effects <- status ~ 
-  age + grade + tumor_size + estrogen_status + progesterone_status + 
-  regional_node_examined + reginol_node_positive + 
-  marital_status_Single + marital_status_Widowed + marital_status_Separated + 
-  x6th_stage_IIB + x6th_stage_IIIA + x6th_stage_IIIB + x6th_stage_IIIC + 
-  a_stage_regional
 
-# Fit main effects model
-main_effects_model <- glm(formula_main_effects, data = balance_data_dummies, family = binomial())
-summary(main_effects_model)
-
-# Add interaction terms incrementally
-interaction_terms <- c("age:grade", "tumor_size:estrogen_status", 
-                       "progesterone_status:regional_node_examined", 
-                       "marital_status_Single:reginol_node_positive")
-
-for (term in interaction_terms) {
-  formula_with_term <- as.formula(paste(deparse(formula_main_effects), "+", term))
-  model <- glm(formula_with_term, data = balance_data_dummies, family = binomial())
-  cat("\nAdding term:", term, "\n")
-  print(summary(model))
-}
-```
 
 
 ```{r} 
