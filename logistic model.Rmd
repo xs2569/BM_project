@@ -451,6 +451,20 @@ cat("The stepwise comparison table has been successfully written to 'aic_bic_ste
 
 ```
 
+```{r}
+library(modelsummary)
+models <- list(
+  "AIC Forward" = aic_forward_model,
+  "AIC Backward" = aic_backward_model,
+  "AIC Stepwise" = aic_both_model,
+  "BIC Forward" = bic_forward_model,
+  "BIC Backward" = bic_backward_model,
+  "BIC Stepwise" = bic_both_model
+)
+modelsummary(models, output = "markdown")
+
+```
+
 
 ```{r}
 library(pROC) 
