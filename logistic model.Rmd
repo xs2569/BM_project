@@ -2,7 +2,7 @@
 title: "Final Project"
 author: "Shiying Wu, Maggie Hsu, Xun Sun"
 date: "`r Sys.Date()`"
-output: html_document
+output: word_document
 ---
 
 ```{r setup}
@@ -44,9 +44,9 @@ confusionMatrix(as.factor(final$predicted_classes), as.factor(final$Status))
 ```
 ## Assumptions
 ```{r multicollinearity}
-vif(logit_model)
+#vif(logit_model)
 # there are aliased coefficients in the model > means some vars have perfect multicoll. 
-cor(sampledf)
+#cor(sampledf)
 #come back to this
   
 ```
@@ -249,7 +249,7 @@ plot(logit_model_balance)
 par(mfrow = c(1, 1))  # Reset graphical parameters
 ```
 
-```{r}
+
 # Stepwise Selection using AIC
 logit_aic <- stepAIC(logit_model, trace = 0, k = 2)
 
@@ -276,7 +276,6 @@ library(caret)
 confusionMatrix(data$predicted_classes_aic, data$status)
 ```
 
-```{r}
 # Stepwise Selection using BIC
 logit_bic <- stepAIC(logit_model, trace = 0, k = log(nrow(data)))
 
@@ -302,7 +301,7 @@ confusionMatrix(data$predicted_classes_bic, data$Status)
 ```
 
 
-```{r}
+
 # Log-Likelihood for AIC and BIC Models
 logLik(logit_aic)
 logLik(logit_bic)
@@ -443,7 +442,7 @@ comparison_table <- merge(aic_combined, bic_combined, by = "Term", all = TRUE)
 
 # Replace NA with 0 for consistency (optional)
 comparison_table[is.na(comparison_table)] <- 0
-
+library(writexl)   
 # Export the Comparison Table to Excel
 write_xlsx(comparison_table, "aic_bic_stepwise_comparison.xlsx")
 
@@ -454,7 +453,7 @@ cat("The stepwise comparison table has been successfully written to 'aic_bic_ste
 
 
 ```{r}
-
+library(pROC) 
 # Function for Model Evaluation
 evaluate_model <- function(model, data, model_name) {
   # Log-Likelihood
