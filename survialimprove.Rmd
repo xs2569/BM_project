@@ -387,7 +387,7 @@ compute_auc <- function(data, time_point) {
 }
 
 data_white <- final[final$race == "White", ]
-data_black <- final[final$race %in% c("Black", "Other"), ]
+data_black <- final[final$race == "Black", ]
 data_black_other <- final[final$race %in% c("Black", "Other"), ]
 
 auc_white <- sapply(time_points, function(t) compute_auc(data_white, t))
@@ -403,6 +403,45 @@ print(auc_black)
 
 print("Time-dependent AUC for Black/Other group:")
 print(auc_black_other)
+
+```
+
+```{r outliers }
+# Calculate quantiles for each group
+quantiles_white <- quantile(final$survival_months[final$race == "White"], probs = c(0, 0.25, 0.5, 0.75,1))
+quantiles_black <- quantile(final$survival_months[final$race == "Black"], probs = c(0, 0.25, 0.5, 0.75,1))
+quantiles_blackother <- quantile(final$survival_months[final$race %in% c("Black", "Other")], probs = c(0, 0.25, 0.5, 0.75,1))
+
+data_white <- final[final$race == "White", ]
+data_black <- final[final$race == "Black", ]
+data_black_other <- final[final$race %in% c("Black", "Other"), ]
+
+# Define a function to calculate AUC at given quantiles
+compute_auc_quantiles <- function(data, quantiles) {
+    sapply(quantiles, function(t) {
+        roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
+                                marker = data$lp, predict.time = t, method = "KM")
+        return(roc_data$AUC)
+    })
+}
+
+
+# Compute AUC at each group's quantiles
+auc_white_quantiles <- compute_auc_quantiles(data_white, quantiles_white)
+auc_black_quantiles <- compute_auc_quantiles(data_black, quantiles_black)
+auc_blackother_quantiles <- compute_auc_quantiles(data_black_other, quantiles_blackother)
+
+# Print AUC results for quantiles
+print("AUC for White group at their quantiles:")
+print(auc_white_quantiles)
+
+
+print("AUC for Black group at their quantiles:")
+print(auc_black_quantiles)
+
+print("AUC for BlackOther group at their quantiles:")
+print(auc_blackother_quantiles)
+
 
 ```
 
