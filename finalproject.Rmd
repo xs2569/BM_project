@@ -5,7 +5,11 @@ output: html_document
 ---
 
 ```{r library, include=FALSE}
-
+library(tidyverse)
+library(survival)
+library(car)
+library(ggplot2)
+library(PerformanceAnalytics)
 ```
 
 ```{r data input, include=FALSE}
