@@ -4,28 +4,39 @@ date: "2024-12-17"
 output: html_document
 ---
 
-```{r}
+```{r library}
 library(tidyverse)
 library(janitor)
 library(ggplot2)
 library(GGally)
 library(dplyr)
 library(gridExtra)
+library(survival)
+library(car)
+library(PerformanceAnalytics)
+library(glmnet)
+library(survival)
+library(tidyr)
+set.seed(1)
+```
 
+```{r data input}
 ## 1
 ## load the data
 project_2_data = 
   read_csv("Project_2_data.csv", na = c("NA", "", ".")) |>
-  janitor::clean_names() 
-view(project_2_data)
+  janitor::clean_names()  |>
+  mutate(status = ifelse(status == "Dead", 1, 0))
+```
 
+```{r Descriptive_data}
 ## Summary statistics for numeric variables
 numerical_vars <- project_2_data[c("age","tumor_size","regional_node_examined","reginol_node_positive","survival_months")]
 summary(numerical_vars)
 
 ## Summary for categorical variables
 project_2_data %>%
-  select(where(~!is.numeric(.))) %>%
+  dplyr::select(where(~!is.numeric(.))) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "category") %>%
   count(variable, category) %>%
   group_by(variable) %>%
@@ -33,95 +44,68 @@ project_2_data %>%
   ungroup() %>%
   print()
 
-
+```
+```{r preprocesssing}
 ## 2
-# Distribution of Survival Months
-ggplot(project_2_data, aes(x = survival_months)) +
-  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
-  labs(title = "Distribution of Survival Months", x = "Survival Months", y = "Frequency")
-# left - skewed
+project_2_data <-
+  na.omit(project_2_data)|>
+  mutate(
+    t_stage = case_when(
+    t_stage == "T1" ~ 1,
+    t_stage == "T2" ~ 2,
+    t_stage == "T3" ~ 3,
+    t_stage == "T4" ~ 4,
+    TRUE ~ NA_real_),
+    n_stage = case_when(
+    n_stage == "N1" ~ 1,
+    n_stage == "N2" ~ 2,
+    n_stage == "N3" ~ 3,
+    TRUE ~ NA_real_),
+    differentiate = case_when(
+    differentiate == "Well differentiated" ~ 1,
+    differentiate == "Moderately differentiated" ~ 2,
+    differentiate == "Poorly differentiated" ~ 3,
+    differentiate == "Undifferentiated" ~ 4,
+    TRUE ~ NA_real_),
+    grade = case_when(
+    grade == "anaplastic; Grade IV" ~ 4,
+    grade == "3" ~ 3,
+    grade == "2" ~ 2,
+    grade == "1" ~ 1,
+    TRUE ~ NA_real_),
+    a_stage_regional = ifelse(a_stage == "Regional", 1, 0),
+    estrogen_status = ifelse(estrogen_status == "Positive", 1, 0),
+    progesterone_status = ifelse(progesterone_status == "Positive", 1, 0)
+    ) |>
+  dplyr::select(-a_stage)
 
-# Count plot for Status (Dead/Alive)
-ggplot(project_2_data, aes(x = status)) +
-  geom_bar(fill = "lightcoral") +
-  labs(title = "Distribution of Status", x = "Status", y = "Count")
-
-ggplot(project_2_data, aes(x = tumor_size)) +
-  geom_histogram()
-ggplot(project_2_data, aes(x = log2(tumor_size+1))) +
-  geom_histogram()
-ggplot(project_2_data, aes(x = sqrt(tumor_size+1))) +
-  geom_histogram()
-
-ggplot(project_2_data, aes(x = regional_node_examined)) +
-  geom_histogram()
-ggplot(project_2_data, aes(x = log2(regional_node_examined+1))) +
-  geom_histogram()
-ggplot(project_2_data, aes(x = sqrt(regional_node_examined+1))) +
-  geom_histogram()
-
-ggplot(project_2_data, aes(x = log(regional_node_examined+1))) +
-  geom_boxplot()
-ggplot(project_2_data, aes(x = sqrt(regional_node_examined+1))) +
-  geom_boxplot()
-
-# significantly more alive than dead (might need data imputations)
-project_2_data %>% 
-  select(where(is.numeric)) %>% 
-  GGally::ggpairs() +
-  labs(title = "Pairwise Relationships Between Numeric Variables")
-
-# Correlation matrix
-cor_matrix <- project_2_data %>% 
-  select(where(is.numeric)) %>% 
-  cor(use = "complete.obs")
-cor_matrix
-
-# QQ plot for Survival Months
+#QQ plots
 ggplot(project_2_data, aes(sample = survival_months)) +
   stat_qq() +
-  stat_qq_line(color = "red") +
-  labs(title = "QQ Plot for Survival Months", x = "Theoretical Quantiles", y = "Sample Quantiles")
+  stat_qq_line()
 
-# QQ plot for Tumor Size
 ggplot(project_2_data, aes(sample = tumor_size)) +
   stat_qq() +
-  stat_qq_line(color = "blue") +
-  labs(title = "QQ Plot for Tumor Size", x = "Theoretical Quantiles", y = "Sample Quantiles")
+  stat_qq_line()
 
-# QQ plot for age
 ggplot(project_2_data, aes(sample = age)) +
   stat_qq() +
-  stat_qq_line(color = "blue") +
+  stat_qq_line() +
   labs(title = "QQ Plot for age", x = "Theoretical Quantiles", y = "Sample Quantiles")
 
-# QQ plot for regional_node_examined
 ggplot(project_2_data, aes(sample = regional_node_examined)) +
   stat_qq() +
   stat_qq_line(color = "blue") +
   labs(title = "QQ Plot for regional_node_examined", x = "Theoretical Quantiles", y = "Sample Quantiles")
 
-# QQ plot for reginol_node_positive
 ggplot(project_2_data, aes(sample =reginol_node_positive)) +
   stat_qq() +
   stat_qq_line(color = "blue") +
   labs(title = "QQ Plot for reginol_node_positive", x = "Theoretical Quantiles", y = "Sample Quantiles")
 
-# Loop to create histograms for each variable
-for (var in numerical_vars) {
-  print(ggplot(project_2_data, aes_string(x = var)) +
-          geom_histogram(bins = 30, fill = "lightgreen", color = "black") +
-          labs(title = paste("Histogram for", var), x = var, y = "Frequency") +
-          theme_minimal() )
-  
-}
-
-### survival months, tumor size and regional_node positive might need transformation
-# square root transformation for survival months
 project_2_data <- project_2_data %>%
   mutate(sqrt_survival_months = sqrt(survival_months))
 
-# Visualization after log transformation
 ggplot(project_2_data, aes(x = sqrt_survival_months)) +
   geom_histogram(bins = 30, fill = "darkgreen", color = "black") +
   labs(title = "Square root-Transformed Survival Months", x = "Square Root(Survival Months)", y = "Frequency")
@@ -135,9 +119,8 @@ ggplot(project_2_data, aes(sample = sqrt_survival_months)) +
     y = "Sample Quantiles"
   )
 
-# Log transformation for survival Months
 project_2_data <- project_2_data %>%
-  mutate(log_survival_months = log(survival_months + 1), # Adding 1 to avoid log(0)
+  mutate(log_survival_months = log(survival_months + 1), 
          log_tumor_size = log(tumor_size + 1))
 
 # Visualization after log transformation
@@ -235,8 +218,89 @@ ggplot(project_2_data, aes(sample = log_reginol_node_positive)) +
     y = "Sample Quantiles"
   )
 
-## Do not involve any transformation
+
+#plot after balance dead and alive
+ggplot(project_2_data, aes(x = survival_months)) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(project_2_data, aes(x = status)) +
+  geom_bar()
+
+
+dead <- project_2_data |>
+  filter(status == 1)
+
+alive <- project_2_data |>
+  filter(status == 0) |>
+  sample_n(nrow(dead))
+
+balance_df<-
+  bind_rows(dead, alive)
+
+#histogram and bar plot
+ggplot(balance_df, aes(x = age)) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = race)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = marital_status)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = t_stage)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = n_stage)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = x6th_stage)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = differentiate)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = grade)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = a_stage_regional)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = tumor_size)) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = log2(tumor_size+1))) +
+  geom_histogram(bins = 30, color = "black") #best
+
+ggplot(balance_df, aes(x = sqrt(tumor_size))) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = log2(tumor_size+1))) +
+  geom_boxplot()#best1
+
+ggplot(balance_df, aes(x = sqrt(tumor_size))) +
+  geom_boxplot()
+```
+
+
+```{r Multicollinearity }
+cor_matrix <- cor(balance_df[, sapply(balance_df, is.numeric)])
+print(cor_matrix)
+
+
+cortable<-balance_df|>
+  dplyr::select(-race,-x6th_stage, -marital_status)
+chart.Correlation(cortable, histogram=TRUE, pch=19)
+
+balance_df <-
+  balance_df|>
+  dplyr::select(-differentiate)
+```
+differentiate and grade are 100% correlated
+need to decided between t_stage and tumor_size, and  n_stage and reginol_node_exam
+
+```{r scatter plot }
 ### 3
+
 # scatter plot for Y and numerical variable 
 numerical_vars <- c("age","tumor_size","regional_node_examined","reginol_node_positive")
 plot_list1 <- list()
@@ -261,12 +325,12 @@ for (var in categorical_vars) {
 }
 grid.arrange(grobs= plot_list2, ncol = 5)
 
-
 ### 1. We get the summary statistics and make the table in excel to have a better format
 ### 2. We suggest tumor size to have a square root transformation, further transformation are still needed after finish the modeling using box-cox 
 ### 3. there are potential outliers identified but we might ignore them because they are quite limited and we have large sample size
 ```
 
+# Logistic model
 ```{r setup}
 library(tidyverse)
 library(survival)
@@ -278,8 +342,6 @@ library(MASS)
 
 data <- read.csv("Project_2_data.csv")
 view(data)
-
-
 
 sampledf <- data |>
   mutate(Status = ifelse(Status == "Dead", 1, 0))
@@ -740,150 +802,83 @@ evaluate_performance(balance_data, bic_backward_model, "Black")
 evaluate_performance(balance_data, bic_backward_model, c("Black", "Other"))
 ```
 
-```{r}
-library(tidyverse)
-library(survival)
-library(car)
-library(ggplot2)
-library(PerformanceAnalytics)
+
+
+# Survival Analysis
+```{r Multicollinearity for survival}
+cox_model <- coxph(Surv(survival_months, status) ~.,
+                   data = balance_df)
+vifs <- vif(cox_model)  
+print(vifs)
+
+balance_df <-
+  balance_df|>
+  dplyr::select(-t_stage,-n_stage,-reginol_node_positive)
 ```
+remove t_stage，n_stage and reginol_node_positive due to higher VIF score
 
-
-```{r data}
-set.seed(1)
-project_2_data = 
-  read_csv("data/project_2_data.csv", na = c("NA", "", ".")) |>
-  janitor::clean_names()  |>
-  mutate(status = ifelse(status == "Dead", 1, 0))
-      
-
-dead <- project_2_data |>
-  filter(status == 1)
-
-alive <- project_2_data |>
-  filter(status == 0) |>
-  sample_n(nrow(dead))
-
-project_2_numdata<-
-  bind_rows(dead, alive) |>
-  mutate(
-    t_stage = case_when(
-    t_stage == "T1" ~ 1,
-    t_stage == "T2" ~ 2,
-    t_stage == "T3" ~ 3,
-    t_stage == "T4" ~ 4,
-    TRUE ~ NA_real_),
-    n_stage = case_when(
-    n_stage == "N1" ~ 1,
-    n_stage == "N2" ~ 2,
-    n_stage == "N3" ~ 3,
-    TRUE ~ NA_real_),
-    differentiate = case_when(
-    differentiate == "Well differentiated" ~ 1,
-    differentiate == "Moderately differentiated" ~ 2,
-    differentiate == "Poorly differentiated" ~ 3,
-    differentiate == "Undifferentiated" ~ 4,
-    TRUE ~ NA_real_),
-    grade = case_when(
-    grade == "anaplastic; Grade IV" ~ 4,
-    grade == "3" ~ 3,
-    grade == "2" ~ 2,
-    grade == "1" ~ 1,
-    TRUE ~ NA_real_),
-    a_stage_regional = ifelse(a_stage == "Regional", 1, 0),
-    estrogen_status = ifelse(estrogen_status == "Positive", 1, 0),
-    progesterone_status = ifelse(progesterone_status == "Positive", 1, 0)
-    ) |>
-  select(-a_stage)
-```
-
-```{r variable selection}
-variables <- names(project_2_numdata)[!names(project_2_numdata) %in% c("survival_months", "status")]
+```{r variable dplyr::selection for survival}
+variables <- names(balance_df)[!names(balance_df) %in% c("survival_months", "status")]
 for (var in variables) {
   formula <- as.formula(paste("Surv(survival_months, status) ~", var))
-  model <- coxph(formula, data = project_2_numdata)
+  model <- coxph(formula, data = balance_df)
   print(var)
   print(summary(model))
 }
 
-ggplot()
-```
-
-All variables are statistically significant except for marriage in "marital_status" 
-```{r Multicollinearity}
-project_2_numdata <-
-  project_2_numdata|>
+balance_df<-
+  balance_df|>
   mutate(Married = ifelse(marital_status == "Married", 1, 0)) |>
-  select(-differentiate, - marital_status)
-
-cor_matrix <- cor(project_2_numdata[, sapply(project_2_numdata, is.numeric)])
-print(cor_matrix)
-
-
-cortable<-project_2_numdata|>
-  select(-race,-x6th_stage)
-cortable$regional_node_examined
-chart.Correlation(cortable, histogram=TRUE, pch=19)
+  dplyr::select(-marital_status)
 ```
 
-We have to choice 1 between 
-t_stage - tumor size
-n stage - regional_node_positive
-
-```{r Multicollinearity continuous}
-muldata = project_2_numdata
-  
-  
-cox_model <- coxph(Surv(survival_months, status) ~.,
-                   data = muldata)
-
-vifs <- vif(cox_model)  
-print(vifs)
-```
-remove t-stage，n_stage and regional_mode_positive due to higher VIF score
-
-```{r final data account for multicolliinearity}
-final = muldata |>
-  select(-t_stage, -n_stage,-reginol_node_positive)
-
-cox_model1 <- coxph(Surv(survival_months, status) ~.,
-                   data = final)
-ph_test <- cox.zph(cox_model1)
+```{r ph assumption test}
+ph_model<- coxph(Surv(survival_months, status) ~.,
+                   data = balance_df)
+ph_test <- cox.zph(ph_model)
 print(ph_test)
 
-vifs <- vif(cox_model1)
-print(vifs)
-summary(cox_model)
+final<- balance_df|>
+  dplyr::select(-progesterone_status, -estrogen_status)
+```
+
+```{r fullmodel}
+fullmodel <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + log2(tumor_size+1) + log2(regional_node_examined+1) + a_stage_regional + Married, data = final)
+summary(Surv_fullmodel)
 ```
 
 
-```{r forward }
-ph_test <- cox.zph(cox_model1)
-print(ph_test)
+```{r AIC auto }
+nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = final)
 
-phob<- final|>
-  select(-progesterone_status, -estrogen_status)|>
-  mutate(log_tumor = log2(tumor_size+1), log_regional_node_examined=log2(regional_node_examined+1))
-
-
-nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = phob)
-fullmodel <- coxph(Surv(survival_months, status) ~ ., data = phob)
-
-forward_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "forward", trace = TRUE)
-backward_model <- step(fullmodel, direction = "backward", trace = TRUE) 
-stepwise_model <- step(nullmodel, scope=list(lower=nullmodel, upper=fullmodel), direction="both")
-ph_test <- cox.zph(forward_model)
-print(ph_test)
+forward_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "forward", trace = FALSE)
+backward_model <- step(fullmodel, direction = "backward", trace = FALSE) 
+stepwise_model <- step(nullmodel, scope=list(lower=nullmodel, upper=fullmodel), direction="both", trace = FALSE)
 forward_model
 backward_model
 stepwise_model
+```
+```{r BIC}
+stepAIC(fullmodel, trace = 0, k = log(nrow(final)))
 
+Bic_model <- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + log2(regional_node_examined+1), data = final)
+Bic_model
+```
+```{r Interact model }
+Inter_model <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + log2(tumor_size+1) + log2(regional_node_examined+1) + a_stage_regional+ Married + Married*log2(regional_node_examined+1), data = final)
+summary(Inter_model)
+Inter_model
+```
+```{r Parsimony model }
+Par_model <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(regional_node_examined+1),
+                            data = final)
+summary(Par_model)
+Par_model
 ```
 
-```{r lasso }
-library(glmnet)
-library(survival)
-predictors <- model.matrix(~ age + race + x6th_stage + log_tumor + log_regional_node_examined + a_stage_regional + Married - 1, data = phob)
+```{r lasso model for survival}
+predictors <- model.matrix(~ age + race + x6th_stage + log(tumor_size +1) + log2(regional_node_examined+1) + a_stage_regional + Married - 1, data = phob)
 predictors_scaled <- scale(predictors)
 response <- with(phob, Surv(survival_months, as.numeric(status)))
 cv_lasso <- cv.glmnet(predictors_scaled, response, family = "cox", alpha = 1, type.measure = "deviance", nfolds = 10)
@@ -892,203 +887,29 @@ best_lambda <- cv_lasso$lambda.min
 final_lasso_model <- glmnet(predictors_scaled, response, family = "cox", alpha = 1, lambda = best_lambda)
 lasso_coefficients <- coef(final_lasso_model)
 print(lasso_coefficients)
-
+lasso_coefficients
 ```
 
 
-```{r phtest }
-ph_test <- cox.zph(cox_model1)
-print(ph_test)
-plot(ph_test) 
-ph_test <- cox.zph(cox_model1)
+```{r performance}
+fullmodel$concordance
+Bic_model$concordance
+Inter_model$concordance
+Par_model$concordance
+
+AIC(fullmodel)
+AIC(Bic_model)
+AIC(Inter_model)
+AIC(Par_model)
+
+BIC(fullmodel)
+BIC(Bic_model)
+BIC(Inter_model)
+BIC(Par_model)
 ```
-
-The Cox model assumes that hazard ratios are constant over time. A non-significant p-value (p > 0.05) indicates that the PH assumption holds. As GLOBAL 47.176 15 1.8e-05, the model did not meet the assumption, as same as estrogen_status and progesterone_status.We need further improve our model.
-
-
-```{r model2}
-
-cox_model2 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            tumor_size + regional_node_examined + a_stage_regional+Married,
-                            data = final,x = TRUE)
-summary(cox_model2)
-```
-
-```{r }
-ph_test <- cox.zph(cox_model2)
-print(ph_test)
-plot(ph_test) 
-```
-now the assumption is been fully achieved after delete estrogen_status and progesterone_status
-
-```{r model3 }
-cox_model3 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            log2(tumor_size+1) + log2(regional_node_examined+1)                                            +a_stage_regional + Married,
-                            data = final)
-summary(cox_model3)
-```
-Add log transformation to the tumor size and regional node_examined, now they are being statistically significant
-
-```{r model4 }
-cox_model4 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            log2(tumor_size+1) + log2(regional_node_examined+1) +                                          +a_stage_regional+ Married + Married*log2(regional_node_examined+1),
-                            data = final)
-summary(cox_model4)
-
-cox_model4
-```
-Noticing married seems insignificant in every variable, we tried to add interaction term with married and all the remaining variables, but the interaction term are all insignificant as well as the main marriage effect except for the interaction between married and log2(regional_node_examined) make the married main effect being statisticlally significant under 0.05 level
-
-
-```{r model5 }
-# Fit a stratified Cox model
-cox_model_strat <- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + 
-                         log2(tumor_size + 1) + log2(regional_node_examined + 1) +
-                         a_stage_regional + Married + Married * log2(regional_node_examined + 1) +
-                         strata(race), data = final)
-
-# Summary of the stratified model
-summary(cox_model_strat)
-
-```
-Since the interaction term gives no significant significant value, we directly drop the marriage variable
-
-
-
-```{r }
-cox_model6 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            log2(regional_node_examined+1),
-                            data = final)
-summary(cox_model6)
-cox_model6
-
-test_ph <- cox.zph(cox_model5)
-print(test_ph)
-plot(test_ph)
-
-library(survival)
-dfbetas_cox <- dfbeta(coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade +
-                            log2(tumor_size + 1) + log2(regional_node_examined + 1) + a_stage_regional, 
-                            data = final))
-plot(dfbetas_cox, main="DFBETAs for each Covariate in the Cox Model")
-
-```
-
-further drop variables tumor_size and a_stage_regional due to quite low significant value.
-
-
-Model Evaluation
-```{r }
-summary(final$survival_months)
-```
-
-
-
-
-```{r }
-library(timeROC)
-cox_models <- list(cox_model3, cox_model4, cox_model6)
-
-time_points <- c(2,43,62,82,107)
-
-dynamic_auc_results <- list()
-
-for (i in 1:length(cox_models)) {
-  
-  current_model <- cox_models[[i]]
-  time_roc <- timeROC(T = final$survival_months, 
-                    delta = final$status, 
-                    marker = predict(current_model, type = "lp"), 
-                    cause = 1,  # Event of interest
-                    times = time_points,  # Time points
-                    iid = TRUE)
-
-  
-  dynamic_auc_results[[paste0("Model_", i)]] <- time_roc$AUC
-  
-  print(paste("AUC for Model", i, "at time points:", paste(time_points, collapse = ", ")))
-  print(round(time_roc$AUC, 3))
-}
-
-library(survivalROC)
-eval_times <- quantile(final$survival_months[final$status == 1], probs = c(0.25, 0.5, 0.75))
-library(survivalROC)
-
-strata <- with(final, status == 1)  # or another strata definition if needed
-eval_time <-  62
-
-roc_result <- survivalROC(Stime = final$survival_months, status = strata, 
-                          marker = risk_predictions_model4, predict.time = eval_time, 
-                          method = "KM")
-
-plot(roc_result$FP, roc_result$TP, type = "l", col = "blue",
-     xlab = "False Positive Rate", ylab = "True Positive Rate",
-     main = paste("ROC Curve at", eval_time, "Days"))
-points(roc_result$FP, roc_result$TP, pch = 19, col = "red")
-text(0.5, 0.5, paste("AUC =", round(roc_result$AUC, 3)))
-
-roc_result$TP  
-1 - roc_result$FP 
-
-# Assuming you have extracted or can calculate specificity from the FP rate:
-specificity <- 1 - roc_result$FP
-
-# Prepare the plot
-plot(roc_result$cut.values, roc_result$TP, type = "l", col = "blue", xlab = "Thresholds", ylab = "Rate",
-     main = "Sensitivity and Specificity over Thresholds")
-lines(roc_result$cut.values, specificity, col = "red")
-legend("bottomright", legend = c("Sensitivity", "Specificity"), col = c("blue", "red"), lty = 1)
-points(roc_result$cut.values, roc_result$TP, pch = 19, col = "blue")  # Add points for sensitivity
-points(roc_result$cut.values, specificity, pch = 19, col = "red")  # Add points for specificity
-
-
-
-library(survivalROC)
-strata <- with(final, status == 1)  # Define event occurrence correctly
-eval_time <- 62  # For example, evaluating at 1 year
-
-roc_result <- survivalROC(Stime = final$survival_months, status = strata,
-                          marker = risk_predictions_model4, predict.time = eval_time,
-                          method = "KM")
-
-# Extracting sensitivity and specificity
-roc_result$TP
-survival_specificity <- 1 - roc_result$FP  # Calculating specificity from FPR
-
-```
-
-model 4 tends to have a relatively higher AUC throughout different time points
-
-C-index
-
-```{r check }
-cox_model4$concordance
-cox_model6$concordance
-forward_model$concordance
-
-cox_model3
-cox_model4
-cox_model6
-AIC(cox_model4)
-AIC(cox_model6)
-AIC(forward_model)
-
-BIC(cox_model4)
-BIC(cox_model6)
-BIC(forward_model)
-```
-
-
-Concordance:
-model1 69.4
-model2 67.0
-model3 67.2
-model4 69.6 (overall account for meeting the model assumption and the multicollinearity, model 4 have the highest concordance score, although accompanied with "married" variable that is not statistically significant)
-model5 67.0
-model6 66.8
 
 ```{r outliers }
-dev_residuals <- residuals(cox_model4, type = "deviance")
+dev_residuals <- residuals(Inter_model, type = "deviance")
 plot(dev_residuals, main = "Deviance Residuals", ylab = "Residuals", xlab = "Index")
 abline(h = c(-2, 2), col = "red", lty = 2) 
 
@@ -1097,28 +918,20 @@ surv_fit <- survfit(Surv(survival_months, status) ~ 1, data = final)
 plot(surv_fit, xlab = "Time (months)", ylab = "Survival Probability", 
      main = "Survival Curve for the Final Model", col = "blue", lwd = 2)
 
-grid()
-
-write.csv(final, "data/final.csv", row.names = FALSE)
 ```
 
-
-
-```{r }
-
-predicted_hazards <- predict(cox_model4, type = "risk")
+```{r risk prediction }
+predicted_hazards <- predict(Inter_model, type = "risk")
 final$predicted_scores = predicted_hazards
-
-
 ```
 
-```{r  }
+```{r auc and disparity check}
 
 time_points <-  c(2,43,62,82,107)
 
 compute_auc <- function(data, time_point) {
     roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
-                            marker = data$lp, predict.time = time_point, method = "KM")
+                            marker = data$predicted_scores, predict.time = time_point, method = "KM")
     return(roc_data$AUC)
 }
 
@@ -1130,7 +943,6 @@ auc_white <- sapply(time_points, function(t) compute_auc(data_white, t))
 auc_black <- sapply(time_points, function(t) compute_auc(data_black, t))
 auc_black_other <- sapply(time_points, function(t) compute_auc(data_black_other, t))
 
-# Print the results
 print("Time-dependent AUC for White group:")
 print(auc_white)
 
@@ -1142,41 +954,31 @@ print(auc_black_other)
 
 ```
 
-```{r }
-# Calculate quantiles for each group
+
+```{r quentile disparity }
 quantiles_white <- quantile(final$survival_months[final$race == "White"], probs = c(0, 0.25, 0.5, 0.75,1))
 quantiles_black <- quantile(final$survival_months[final$race == "Black"], probs = c(0, 0.25, 0.5, 0.75,1))
 quantiles_blackother <- quantile(final$survival_months[final$race %in% c("Black", "Other")], probs = c(0, 0.25, 0.5, 0.75,1))
+
+
 
 data_white <- final[final$race == "White", ]
 data_black <- final[final$race == "Black", ]
 data_black_other <- final[final$race %in% c("Black", "Other"), ]
 
-# Define a function to calculate AUC at given quantiles
 compute_auc_quantiles <- function(data, quantiles) {
     sapply(quantiles, function(t) {
         roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
-                                marker = data$lp, predict.time = t, method = "KM")
+                                marker = data$predicted_scores, predict.time = t, method = "KM")
         return(roc_data$AUC)
     })
 }
 
-
-# Compute AUC at each group's quantiles
-auc_white_quantiles <- compute_auc_quantiles(data_white, quantiles_white)
-auc_black_quantiles <- compute_auc_quantiles(data_black, quantiles_black)
-auc_blackother_quantiles <- compute_auc_quantiles(data_black_other, quantiles_blackother)
-
-# Print AUC results for quantiles
-print("AUC for White group at their quantiles:")
-print(auc_white_quantiles)
-
-
-print("AUC for Black group at their quantiles:")
-print(auc_black_quantiles)
-
-print("AUC for BlackOther group at their quantiles:")
-print(auc_blackother_quantiles)
-
+compute_auc_quantiles(data_white, quantiles_white)
+compute_auc_quantiles(data_black, quantiles_black)
+compute_auc_quantiles(data_black_other, quantiles_blackother)
 
 ```
+
+
+

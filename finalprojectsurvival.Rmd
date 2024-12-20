@@ -1,0 +1,358 @@
+---
+title: "Final report"
+date: "2024-12-17"
+output: html_document
+---
+
+```{r library, include=FALSE}
+library(tidyverse)
+library(survival)
+library(car)
+library(ggplot2)
+library(PerformanceAnalytics)
+library(glmnet)
+library(survival)
+library(dplyr)
+library(tidyr)
+set.seed(1)
+```
+
+```{r data input, include=FALSE}
+project_2_data = 
+  read_csv("data/project_2_data.csv", na = c("NA", "", ".")) |>
+  janitor::clean_names()  |>
+  mutate(status = ifelse(status == "Dead", 1, 0))
+```
+
+
+```{r Descriptive_data}
+numerical_vars <- project_2_data[c("age","tumor_size","regional_node_examined","reginol_node_positive","survival_months")]
+summary(numerical_vars)
+
+project_2_data %>%
+  dplyr::select(where(~ !is.numeric(.))) %>%  
+  pivot_longer(everything(), names_to = "variable", values_to = "category") %>%
+  count(variable, category) %>%
+  group_by(variable) %>%
+  mutate(proportion = n / sum(n)) %>%
+  ungroup() %>%
+  print()
+```
+
+```{r preprocesssing}
+project_2_data <-
+  na.omit(project_2_data)|>
+  mutate(
+    t_stage = case_when(
+    t_stage == "T1" ~ 1,
+    t_stage == "T2" ~ 2,
+    t_stage == "T3" ~ 3,
+    t_stage == "T4" ~ 4,
+    TRUE ~ NA_real_),
+    n_stage = case_when(
+    n_stage == "N1" ~ 1,
+    n_stage == "N2" ~ 2,
+    n_stage == "N3" ~ 3,
+    TRUE ~ NA_real_),
+    differentiate = case_when(
+    differentiate == "Well differentiated" ~ 1,
+    differentiate == "Moderately differentiated" ~ 2,
+    differentiate == "Poorly differentiated" ~ 3,
+    differentiate == "Undifferentiated" ~ 4,
+    TRUE ~ NA_real_),
+    grade = case_when(
+    grade == "anaplastic; Grade IV" ~ 4,
+    grade == "3" ~ 3,
+    grade == "2" ~ 2,
+    grade == "1" ~ 1,
+    TRUE ~ NA_real_),
+    a_stage_regional = ifelse(a_stage == "Regional", 1, 0),
+    estrogen_status = ifelse(estrogen_status == "Positive", 1, 0),
+    progesterone_status = ifelse(progesterone_status == "Positive", 1, 0)
+    ) |>
+  dplyr::select(-a_stage)
+```
+
+
+
+```{r Visualization}
+ggplot(project_2_data, aes(x = survival_months)) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(project_2_data, aes(x = status)) +
+  geom_bar()
+
+dead <- project_2_data |>
+  filter(status == 1)
+
+alive <- project_2_data |>
+  filter(status == 0) |>
+  sample_n(nrow(dead))
+
+balance_df<-
+  bind_rows(dead, alive)
+
+ggplot(balance_df, aes(x = age)) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = race)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = marital_status)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = t_stage)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = n_stage)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = x6th_stage)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = differentiate)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = grade)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = a_stage_regional)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = tumor_size)) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = log2(tumor_size+1))) +
+  geom_histogram(bins = 30, color = "black") #best
+
+ggplot(balance_df, aes(x = sqrt(tumor_size))) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = log2(tumor_size+1))) +
+  geom_boxplot()#best1
+
+ggplot(balance_df, aes(x = sqrt(tumor_size))) +
+  geom_boxplot()
+
+ggplot(balance_df, aes(x = estrogen_status)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = progesterone_status)) +
+  geom_bar()
+
+ggplot(balance_df, aes(x = regional_node_examined)) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = log2(regional_node_examined+1))) +
+  geom_histogram(bins = 30, color = "black") #best
+
+ggplot(balance_df, aes(x = sqrt(regional_node_examined))) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = log2(regional_node_examined+1))) +
+  geom_boxplot()#best
+
+ggplot(balance_df, aes(x = sqrt(regional_node_examined))) +
+  geom_boxplot()
+
+ggplot(balance_df, aes(x = reginol_node_positive)) +
+  geom_histogram(bins = 30, color = "black")
+
+ggplot(balance_df, aes(x = log2(reginol_node_positive+1))) +
+  geom_histogram(bins = 30, color = "black") #not work really well
+
+```
+
+```{r Multicollinearity}
+cor_matrix <- cor(balance_df[, sapply(balance_df, is.numeric)])
+print(cor_matrix)
+
+
+cortable<-balance_df|>
+  dplyr::select(-race,-x6th_stage, -marital_status)
+chart.Correlation(cortable, histogram=TRUE, pch=19)
+
+balance_df <-
+  balance_df|>
+  dplyr::select(-differentiate)
+```
+need to decided between t_stage and tumor_size, and  n_stage and reginol_node_exam
+
+# Survival Analysis
+```{r Multicollinearity for survival}
+cox_model <- coxph(Surv(survival_months, status) ~.,
+                   data = balance_df)
+vifs <- vif(cox_model)  
+print(vifs)
+
+balance_df <-
+  balance_df|>
+  dplyr::select(-t_stage,-n_stage,-reginol_node_positive)
+```
+remove t_stage，n_stage and reginol_node_positive due to higher VIF score
+
+```{r variable dplyr::selection for survival}
+variables <- names(balance_df)[!names(balance_df) %in% c("survival_months", "status")]
+for (var in variables) {
+  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
+  model <- coxph(formula, data = balance_df)
+  print(var)
+  print(summary(model))
+}
+
+balance_df<-
+  balance_df|>
+  mutate(Married = ifelse(marital_status == "Married", 1, 0)) |>
+  dplyr::select(-marital_status)
+```
+
+```{r ph assumption test}
+ph_model<- coxph(Surv(survival_months, status) ~.,
+                   data = balance_df)
+ph_test <- cox.zph(ph_model)
+print(ph_test)
+
+final<- balance_df|>
+  dplyr::select(-progesterone_status, -estrogen_status)
+```
+
+```{r fullmodel}
+fullmodel <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + log2(tumor_size+1) + log2(regional_node_examined+1) + a_stage_regional + Married, data = final)
+summary(Surv_fullmodel)
+```
+
+
+```{r AIC auto }
+nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = final)
+
+forward_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "forward", trace = FALSE)
+backward_model <- step(fullmodel, direction = "backward", trace = FALSE) 
+stepwise_model <- step(nullmodel, scope=list(lower=nullmodel, upper=fullmodel), direction="both", trace = FALSE)
+forward_model
+backward_model
+stepwise_model
+```
+```{r BIC}
+stepAIC(fullmodel, trace = 0, k = log(nrow(final)))
+
+Bic_model <- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + log2(regional_node_examined+1), data = final)
+Bic_model
+```
+```{r Interact model }
+Inter_model <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + log2(tumor_size+1) + log2(regional_node_examined+1) + a_stage_regional+ Married + Married*log2(regional_node_examined+1), data = final)
+summary(Inter_model)
+Inter_model
+```
+```{r Parsimony model }
+Par_model <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(regional_node_examined+1),
+                            data = final)
+summary(Par_model)
+Par_model
+```
+
+```{r lasso model for survival}
+predictors <- model.matrix(~ age + race + x6th_stage + log(tumor_size +1) + log2(regional_node_examined+1) + a_stage_regional + Married - 1, data = phob)
+predictors_scaled <- scale(predictors)
+response <- with(phob, Surv(survival_months, as.numeric(status)))
+cv_lasso <- cv.glmnet(predictors_scaled, response, family = "cox", alpha = 1, type.measure = "deviance", nfolds = 10)
+plot(cv_lasso)
+best_lambda <- cv_lasso$lambda.min
+final_lasso_model <- glmnet(predictors_scaled, response, family = "cox", alpha = 1, lambda = best_lambda)
+lasso_coefficients <- coef(final_lasso_model)
+print(lasso_coefficients)
+lasso_coefficients
+```
+
+
+```{r performance}
+fullmodel$concordance
+Bic_model$concordance
+Inter_model$concordance
+Par_model$concordance
+
+AIC(fullmodel)
+AIC(Bic_model)
+AIC(Inter_model)
+AIC(Par_model)
+
+BIC(fullmodel)
+BIC(Bic_model)
+BIC(Inter_model)
+BIC(Par_model)
+```
+
+```{r outliers }
+dev_residuals <- residuals(Inter_model, type = "deviance")
+plot(dev_residuals, main = "Deviance Residuals", ylab = "Residuals", xlab = "Index")
+abline(h = c(-2, 2), col = "red", lty = 2) 
+
+surv_fit <- survfit(Surv(survival_months, status) ~ 1, data = final)
+
+plot(surv_fit, xlab = "Time (months)", ylab = "Survival Probability", 
+     main = "Survival Curve for the Final Model", col = "blue", lwd = 2)
+
+```
+
+```{r risk prediction }
+predicted_hazards <- predict(Inter_model, type = "risk")
+final$predicted_scores = predicted_hazards
+```
+
+```{r auc and disparity check}
+
+time_points <-  c(2,43,62,82,107)
+
+compute_auc <- function(data, time_point) {
+    roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
+                            marker = data$predicted_scores, predict.time = time_point, method = "KM")
+    return(roc_data$AUC)
+}
+
+data_white <- final[final$race == "White", ]
+data_black <- final[final$race == "Black", ]
+data_black_other <- final[final$race %in% c("Black", "Other"), ]
+
+auc_white <- sapply(time_points, function(t) compute_auc(data_white, t))
+auc_black <- sapply(time_points, function(t) compute_auc(data_black, t))
+auc_black_other <- sapply(time_points, function(t) compute_auc(data_black_other, t))
+
+print("Time-dependent AUC for White group:")
+print(auc_white)
+
+print("Time-dependent AUC for black group:")
+print(auc_black)
+
+print("Time-dependent AUC for Black/Other group:")
+print(auc_black_other)
+
+```
+
+
+```{r quentile disparity }
+quantiles_white <- quantile(final$survival_months[final$race == "White"], probs = c(0, 0.25, 0.5, 0.75,1))
+quantiles_black <- quantile(final$survival_months[final$race == "Black"], probs = c(0, 0.25, 0.5, 0.75,1))
+quantiles_blackother <- quantile(final$survival_months[final$race %in% c("Black", "Other")], probs = c(0, 0.25, 0.5, 0.75,1))
+
+
+
+data_white <- final[final$race == "White", ]
+data_black <- final[final$race == "Black", ]
+data_black_other <- final[final$race %in% c("Black", "Other"), ]
+
+compute_auc_quantiles <- function(data, quantiles) {
+    sapply(quantiles, function(t) {
+        roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
+                                marker = data$predicted_scores, predict.time = t, method = "KM")
+        return(roc_data$AUC)
+    })
+}
+
+compute_auc_quantiles(data_white, quantiles_white)
+compute_auc_quantiles(data_black, quantiles_black)
+compute_auc_quantiles(data_black_other, quantiles_blackother)
+
+```
+
+
+
