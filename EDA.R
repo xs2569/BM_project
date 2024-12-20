@@ -39,6 +39,25 @@ ggplot(project_2_data, aes(x = status)) +
   geom_bar(fill = "lightcoral") +
   labs(title = "Distribution of Status", x = "Status", y = "Count")
 
+ggplot(project_2_data, aes(x = tumor_size)) +
+  geom_histogram()
+ggplot(project_2_data, aes(x = log2(tumor_size+1))) +
+  geom_histogram()
+ggplot(project_2_data, aes(x = sqrt(tumor_size+1))) +
+  geom_histogram()
+
+ggplot(project_2_data, aes(x = regional_node_examined)) +
+  geom_histogram()
+ggplot(project_2_data, aes(x = log2(regional_node_examined+1))) +
+  geom_histogram()
+ggplot(project_2_data, aes(x = sqrt(regional_node_examined+1))) +
+  geom_histogram()
+
+ggplot(project_2_data, aes(x = log(regional_node_examined+1))) +
+  geom_boxplot()
+ggplot(project_2_data, aes(x = sqrt(regional_node_examined+1))) +
+  geom_boxplot()
+
 # significantly more alive than dead (might need data imputations)
 project_2_data %>% 
   select(where(is.numeric)) %>% 

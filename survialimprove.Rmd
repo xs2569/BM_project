@@ -69,9 +69,12 @@ for (var in variables) {
   print(var)
   print(summary(model))
 }
+
+ggplot()
 ```
 
 All variables are statistically significant except for marriage in "marital_status" 
+```
 
 ```{r Multicollinearity}
 project_2_numdata <-
@@ -107,36 +110,52 @@ remove t-stage，n_stage and regional_mode_positive due to higher VIF score
 ```{r final data account for multicolliinearity}
 final = muldata |>
   select(-t_stage, -n_stage,-reginol_node_positive)
-  
+
 cox_model1 <- coxph(Surv(survival_months, status) ~.,
                    data = final)
+ph_test <- cox.zph(cox_model1)
+print(ph_test)
+
 vifs <- vif(cox_model1)
 print(vifs)
 summary(cox_model)
 ```
 ```{r forward }
-nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = final)
-fullmodel <- coxph(Surv(survival_months, status) ~ ., data = final)
+ph_test <- cox.zph(cox_model1)
+print(ph_test)
 
-forward_model <- step(nullmodel,
-                      scope = list(lower = nullmodel, upper = fullmodel),
-                      direction = "forward",
-                      trace = TRUE)
+phob<- final|>
+  select(-progesterone_status, -estrogen_status)|>
+  mutate(log_tumor = log2(tumor_size+1), log_regional_node_examined=log2(regional_node_examined+1))
+
+
+nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = phob)
+fullmodel <- coxph(Surv(survival_months, status) ~ ., data = phob)
+
+forward_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "forward", trace = TRUE)
+backward_model <- step(fullmodel, direction = "backward", trace = TRUE) 
+stepwise_model <- step(nullmodel, scope=list(lower=nullmodel, upper=fullmodel), direction="both")
+ph_test <- cox.zph(forward_model)
+print(ph_test)
 forward_model
-```
-```{r backward }
-backward_model <- step(fullmodel,
-                       direction = "backward",
-                       trace = TRUE) 
 backward_model
-```
-```{r stepwise }
-stepwise_model <- step(nullmodel,
-                       scope = list(lower = nullmodel, upper = final),
-                       direction = "both",
-                       trace = TRUE)
-
 stepwise_model
+
+```
+
+```{r lasso}
+library(glmnet)
+library(survival)
+predictors <- model.matrix(~ age + race + x6th_stage + log_tumor + log_regional_node_examined + a_stage_regional + Married - 1, data = phob)
+predictors_scaled <- scale(predictors)
+response <- with(phob, Surv(survival_months, as.numeric(status)))
+cv_lasso <- cv.glmnet(predictors_scaled, response, family = "cox", alpha = 1, type.measure = "deviance", nfolds = 10)
+plot(cv_lasso)
+best_lambda <- cv_lasso$lambda.min
+final_lasso_model <- glmnet(predictors_scaled, response, family = "cox", alpha = 1, lambda = best_lambda)
+lasso_coefficients <- coef(final_lasso_model)
+print(lasso_coefficients)
+
 ```
 
 
@@ -144,6 +163,7 @@ stepwise_model
 ph_test <- cox.zph(cox_model1)
 print(ph_test)
 plot(ph_test) 
+ph_test <- cox.zph(cox_model1)
 ```
 
 The Cox model assumes that hazard ratios are constant over time. A non-significant p-value (p > 0.05) indicates that the PH assumption holds. As GLOBAL 47.176 15 1.8e-05, the model did not meet the assumption, as same as estrogen_status and progesterone_status.We need further improve our model.
@@ -177,15 +197,22 @@ cox_model4 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + gr
                             log2(tumor_size+1) + log2(regional_node_examined+1) +                                          +a_stage_regional+ Married + Married*log2(regional_node_examined+1),
                             data = final)
 summary(cox_model4)
+
+cox_model4
 ```
 Noticing married seems insignificant in every variable, we tried to add interaction term with married and all the remaining variables, but the interaction term are all insignificant as well as the main marriage effect except for the interaction between married and log2(regional_node_examined) make the married main effect being statisticlally significant under 0.05 level
 
 
 ```{r model5}
-cox_model5 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
-                            log2(tumor_size+1) + log2(regional_node_examined+1)+ a_stage_regional,
-                            data = final)
-summary(cox_model5)
+# Fit a stratified Cox model
+cox_model_strat <- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + 
+                         log2(tumor_size + 1) + log2(regional_node_examined + 1) +
+                         a_stage_regional + Married + Married * log2(regional_node_examined + 1) +
+                         strata(race), data = final)
+
+# Summary of the stratified model
+summary(cox_model_strat)
+
 ```
 Since the interaction term gives no significant significant value, we directly drop the marriage variable
 
@@ -196,7 +223,7 @@ cox_model6 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + gr
                             log2(regional_node_examined+1),
                             data = final)
 summary(cox_model6)
-
+cox_model6
 
 test_ph <- cox.zph(cox_model5)
 print(test_ph)
@@ -219,9 +246,11 @@ summary(final$survival_months)
 ```
 
 
+
+
 ```{r}
 library(timeROC)
-cox_models <- list(cox_model1, cox_model2, cox_model3, cox_model4, cox_model5, cox_model6)
+cox_models <- list(cox_model3, cox_model4, cox_model6)
 
 time_points <- c(2,43,62,82,107)
 
@@ -243,19 +272,73 @@ for (i in 1:length(cox_models)) {
   print(paste("AUC for Model", i, "at time points:", paste(time_points, collapse = ", ")))
   print(round(time_roc$AUC, 3))
 }
+
+library(survivalROC)
+eval_times <- quantile(final$survival_months[final$status == 1], probs = c(0.25, 0.5, 0.75))
+library(survivalROC)
+
+strata <- with(final, status == 1)  # or another strata definition if needed
+eval_time <-  62
+
+roc_result <- survivalROC(Stime = final$survival_months, status = strata, 
+                          marker = risk_predictions_model4, predict.time = eval_time, 
+                          method = "KM")
+
+plot(roc_result$FP, roc_result$TP, type = "l", col = "blue",
+     xlab = "False Positive Rate", ylab = "True Positive Rate",
+     main = paste("ROC Curve at", eval_time, "Days"))
+points(roc_result$FP, roc_result$TP, pch = 19, col = "red")
+text(0.5, 0.5, paste("AUC =", round(roc_result$AUC, 3)))
+
+roc_result$TP  
+1 - roc_result$FP 
+
+# Assuming you have extracted or can calculate specificity from the FP rate:
+specificity <- 1 - roc_result$FP
+
+# Prepare the plot
+plot(roc_result$cut.values, roc_result$TP, type = "l", col = "blue", xlab = "Thresholds", ylab = "Rate",
+     main = "Sensitivity and Specificity over Thresholds")
+lines(roc_result$cut.values, specificity, col = "red")
+legend("bottomright", legend = c("Sensitivity", "Specificity"), col = c("blue", "red"), lty = 1)
+points(roc_result$cut.values, roc_result$TP, pch = 19, col = "blue")  # Add points for sensitivity
+points(roc_result$cut.values, specificity, pch = 19, col = "red")  # Add points for specificity
+
+
+
+library(survivalROC)
+strata <- with(final, status == 1)  # Define event occurrence correctly
+eval_time <- 62  # For example, evaluating at 1 year
+
+roc_result <- survivalROC(Stime = final$survival_months, status = strata,
+                          marker = risk_predictions_model4, predict.time = eval_time,
+                          method = "KM")
+
+# Extracting sensitivity and specificity
+roc_result$TP
+survival_specificity <- 1 - roc_result$FP  # Calculating specificity from FPR
+
 ```
+
 model 4 tends to have a relatively higher AUC throughout different time points
 
-
-
 C-index
-```{r}
-cox_model1$concordance
-cox_model2$concordance
-cox_model3$concordance
+
+```{r check}
 cox_model4$concordance
-cox_model5$concordance
 cox_model6$concordance
+forward_model$concordance
+
+cox_model3
+cox_model4
+cox_model6
+AIC(cox_model4)
+AIC(cox_model6)
+AIC(forward_model)
+
+BIC(cox_model4)
+BIC(cox_model6)
+BIC(forward_model)
 ```
 
 
@@ -279,6 +362,3 @@ plot(surv_fit, xlab = "Time (months)", ylab = "Survival Probability",
 
 grid()
 ```
-
-
-

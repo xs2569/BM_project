@@ -1,0 +1,109 @@
+---
+title: "Final report"
+date: "2024-12-17"
+output: html_document
+---
+
+```{r library, include=FALSE}
+
+```
+
+```{r data input, include=FALSE}
+set.seed(1)
+project_2_data = 
+  read_csv("data/project_2_data.csv", na = c("NA", "", ".")) |>
+  janitor::clean_names()  |>
+  mutate(status = ifelse(status == "Dead", 1, 0))
+      
+
+dead <- project_2_data |>
+  filter(status == 1)
+
+alive <- project_2_data |>
+  filter(status == 0) |>
+  sample_n(nrow(dead))
+
+project_2_data<-
+  bind_rows(dead, alive) |>
+  mutate(
+    t_stage = case_when(
+    t_stage == "T1" ~ 1,
+    t_stage == "T2" ~ 2,
+    t_stage == "T3" ~ 3,
+    t_stage == "T4" ~ 4,
+    TRUE ~ NA_real_),
+    n_stage = case_when(
+    n_stage == "N1" ~ 1,
+    n_stage == "N2" ~ 2,
+    n_stage == "N3" ~ 3,
+    TRUE ~ NA_real_),
+    differentiate = case_when(
+    differentiate == "Well differentiated" ~ 1,
+    differentiate == "Moderately differentiated" ~ 2,
+    differentiate == "Poorly differentiated" ~ 3,
+    differentiate == "Undifferentiated" ~ 4,
+    TRUE ~ NA_real_),
+    grade = case_when(
+    grade == "anaplastic; Grade IV" ~ 4,
+    grade == "3" ~ 3,
+    grade == "2" ~ 2,
+    grade == "1" ~ 1,
+    TRUE ~ NA_real_),
+    a_stage_regional = ifelse(a_stage == "Regional", 1, 0),
+    estrogen_status = ifelse(estrogen_status == "Positive", 1, 0),
+    progesterone_status = ifelse(progesterone_status == "Positive", 1, 0)
+    ) |>
+  select(-a_stage)
+```
+
+
+```{r Descriptive_data}
+numerical_vars <- project_2_data[c("age","tumor_size","regional_node_examined","reginol_node_positive","survival_months")]
+summary(numerical_vars)
+
+project_2_data %>%
+  select(where(~!is.numeric(.))) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "category") %>%
+  count(variable, category) %>%
+  group_by(variable) %>%
+  mutate(proportion = n / sum(n)) %>%
+  ungroup() %>%
+  print()
+```
+
+```{r Visualization}
+ggplot(project_2_data, aes(x = survival_months)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  labs(title = "Distribution of Survival Months", x = "Survival Months", y = "Frequency")
+
+ggplot(project_2_data, aes(x = status)) +
+  geom_bar(fill = "lightcoral") +
+  labs(title = "Distribution of Status", x = "Status", y = "Count")
+
+```
+
+```{r Multicollinearity}
+project_2_data <-
+  project_2_data|>
+  mutate(Married = ifelse(marital_status == "Married", 1, 0)) |>
+  select(-differentiate, - marital_status)
+
+cor_matrix <- cor(project_2_numdata[, sapply(project_2_numdata, is.numeric)])
+print(cor_matrix)
+
+
+cortable<-project_2_numdata|>
+  select(-race,-x6th_stage)
+cortable$regional_node_examined
+chart.Correlation(cortable, histogram=TRUE, pch=19)
+```
+
+```{r variable selection}
+variables <- names(project_2_numdata)[!names(project_2_numdata) %in% c("survival_months", "status")]
+for (var in variables) {
+  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
+  model <- coxph(formula, data = project_2_numdata)
+  print(var)
+  print(summary(model))
+}
+```
