@@ -4,7 +4,743 @@ date: "2024-12-17"
 output: html_document
 ---
 
-```{r library, include=FALSE}
+```{r}
+library(tidyverse)
+library(janitor)
+library(ggplot2)
+library(GGally)
+library(dplyr)
+library(gridExtra)
+
+## 1
+## load the data
+project_2_data = 
+  read_csv("Project_2_data.csv", na = c("NA", "", ".")) |>
+  janitor::clean_names() 
+view(project_2_data)
+
+## Summary statistics for numeric variables
+numerical_vars <- project_2_data[c("age","tumor_size","regional_node_examined","reginol_node_positive","survival_months")]
+summary(numerical_vars)
+
+## Summary for categorical variables
+project_2_data %>%
+  select(where(~!is.numeric(.))) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "category") %>%
+  count(variable, category) %>%
+  group_by(variable) %>%
+  mutate(proportion = n / sum(n)) %>%
+  ungroup() %>%
+  print()
+
+
+## 2
+# Distribution of Survival Months
+ggplot(project_2_data, aes(x = survival_months)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  labs(title = "Distribution of Survival Months", x = "Survival Months", y = "Frequency")
+# left - skewed
+
+# Count plot for Status (Dead/Alive)
+ggplot(project_2_data, aes(x = status)) +
+  geom_bar(fill = "lightcoral") +
+  labs(title = "Distribution of Status", x = "Status", y = "Count")
+
+ggplot(project_2_data, aes(x = tumor_size)) +
+  geom_histogram()
+ggplot(project_2_data, aes(x = log2(tumor_size+1))) +
+  geom_histogram()
+ggplot(project_2_data, aes(x = sqrt(tumor_size+1))) +
+  geom_histogram()
+
+ggplot(project_2_data, aes(x = regional_node_examined)) +
+  geom_histogram()
+ggplot(project_2_data, aes(x = log2(regional_node_examined+1))) +
+  geom_histogram()
+ggplot(project_2_data, aes(x = sqrt(regional_node_examined+1))) +
+  geom_histogram()
+
+ggplot(project_2_data, aes(x = log(regional_node_examined+1))) +
+  geom_boxplot()
+ggplot(project_2_data, aes(x = sqrt(regional_node_examined+1))) +
+  geom_boxplot()
+
+# significantly more alive than dead (might need data imputations)
+project_2_data %>% 
+  select(where(is.numeric)) %>% 
+  GGally::ggpairs() +
+  labs(title = "Pairwise Relationships Between Numeric Variables")
+
+# Correlation matrix
+cor_matrix <- project_2_data %>% 
+  select(where(is.numeric)) %>% 
+  cor(use = "complete.obs")
+cor_matrix
+
+# QQ plot for Survival Months
+ggplot(project_2_data, aes(sample = survival_months)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  labs(title = "QQ Plot for Survival Months", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
+# QQ plot for Tumor Size
+ggplot(project_2_data, aes(sample = tumor_size)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(title = "QQ Plot for Tumor Size", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
+# QQ plot for age
+ggplot(project_2_data, aes(sample = age)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(title = "QQ Plot for age", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
+# QQ plot for regional_node_examined
+ggplot(project_2_data, aes(sample = regional_node_examined)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(title = "QQ Plot for regional_node_examined", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
+# QQ plot for reginol_node_positive
+ggplot(project_2_data, aes(sample =reginol_node_positive)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(title = "QQ Plot for reginol_node_positive", x = "Theoretical Quantiles", y = "Sample Quantiles")
+
+# Loop to create histograms for each variable
+for (var in numerical_vars) {
+  print(ggplot(project_2_data, aes_string(x = var)) +
+          geom_histogram(bins = 30, fill = "lightgreen", color = "black") +
+          labs(title = paste("Histogram for", var), x = var, y = "Frequency") +
+          theme_minimal() )
+  
+}
+
+### survival months, tumor size and regional_node positive might need transformation
+# square root transformation for survival months
+project_2_data <- project_2_data %>%
+  mutate(sqrt_survival_months = sqrt(survival_months))
+
+# Visualization after log transformation
+ggplot(project_2_data, aes(x = sqrt_survival_months)) +
+  geom_histogram(bins = 30, fill = "darkgreen", color = "black") +
+  labs(title = "Square root-Transformed Survival Months", x = "Square Root(Survival Months)", y = "Frequency")
+
+ggplot(project_2_data, aes(sample = sqrt_survival_months)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(
+    title = "QQ Plot for Square Root-Transformed Survival Months",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  )
+
+# Log transformation for survival Months
+project_2_data <- project_2_data %>%
+  mutate(log_survival_months = log(survival_months + 1), # Adding 1 to avoid log(0)
+         log_tumor_size = log(tumor_size + 1))
+
+# Visualization after log transformation
+ggplot(project_2_data, aes(x = log_survival_months)) +
+  geom_histogram(bins = 30, fill = "darkgreen", color = "black") +
+  labs(title = "Log-Transformed Survival Months", x = "Log(Survival Months)", y = "Frequency")
+
+## QQ-plot in survival months after log transformation
+ggplot(project_2_data, aes(sample = log_survival_months)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(
+    title = "QQ Plot for Log-Transformed Survival Months",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  )
+### do not involve transformation for survival months
+
+# Square root transformation for Tumor Size
+project_2_data <- project_2_data %>%
+  mutate(sqrt_tumor_size = sqrt(tumor_size))
+
+# Visualization after square root transformation
+ggplot(project_2_data, aes(x = sqrt_tumor_size)) +
+  geom_histogram(bins = 30, fill = "purple", color = "black") +
+  labs(title = "Square Root Transformed Tumor Size", x = "Sqrt(Tumor Size)", y = "Frequency")
+
+# QQ Plot: Square root-transformed data
+ggplot(project_2_data, aes(sample = sqrt_tumor_size)) +
+  stat_qq() +
+  stat_qq_line(color = "green") +
+  labs(
+    title = "QQ Plot for Square Root Transformed Tumor Size",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  )
+## Square root transformation for tumor size is needed
+
+# Square root transformation for regional_node_positive
+project_2_data <- project_2_data %>%
+  mutate(sqrt_reginol_node_positive = sqrt(reginol_node_positive))
+
+# Visualization after square root transformation
+ggplot(project_2_data, aes(x = sqrt_reginol_node_positive)) +
+  geom_histogram(bins = 30, fill = "blue", color = "black") +
+  labs(title = "Square Root Transformed Regional Node Positive", x = "Sqrt(Regional Node Positive)", y = "Frequency")
+
+# QQ Plot: Square root-transformed data
+ggplot(project_2_data, aes(sample = sqrt_reginol_node_positive)) +
+  stat_qq() +
+  stat_qq_line(color = "green") +
+  labs(
+    title = "QQ Plot for Square Root Transformed Regional Node Positive",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  )
+
+# Inverse transformation for regional_node_positive
+project_2_data <- project_2_data %>%
+  mutate(inverse_reginol_node_positive = 1/reginol_node_positive)
+
+# Visualization after square root transformation
+ggplot(project_2_data, aes(x = inverse_reginol_node_positive)) +
+  geom_histogram(bins = 30, fill = "blue", color = "black") +
+  labs(title = "Square Root Transformed Regional Node Positive", x = "Sqrt(Regional Node Positive)", y = "Frequency"
+       )
+
+# QQ Plot: Square root-transformed data
+ggplot(project_2_data, aes(sample = inverse_reginol_node_positive)) +
+  stat_qq() +
+  stat_qq_line(color = "green") +
+  labs(
+    title = "QQ Plot for Square Root Transformed Regional Node Positive",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  )
+
+# Log transformation for regional_node_positive
+project_2_data <- project_2_data %>%
+  mutate(log_reginol_node_positive = log(reginol_node_positive + 1), # Adding 1 to avoid log(0)
+         log_reginol_node_positive = log(reginol_node_positive + 1))
+
+# Visualization after log transformation
+ggplot(project_2_data, aes(x = log_reginol_node_positive)) +
+  geom_histogram(bins = 30, fill = "darkgreen", color = "black") +
+  labs(title = "Log-Transformed Regional Node Positive", x = "Log(Survival Months)", y = "Frequency")
+
+# QQ Plot: Square log-transformed data
+ggplot(project_2_data, aes(sample = log_reginol_node_positive)) +
+  stat_qq() +
+  stat_qq_line(color = "blue") +
+  labs(
+    title = "QQ Plot for Log-Transformed Regional Node Positive",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  )
+
+## Do not involve any transformation
+### 3
+# scatter plot for Y and numerical variable 
+numerical_vars <- c("age","tumor_size","regional_node_examined","reginol_node_positive")
+plot_list1 <- list()
+for (var in numerical_vars) {
+  p<- ggplot(project_2_data, aes_string(x = var, y = "survival_months")) + 
+    geom_point(color = "blue", alpha = 0.6) +
+    geom_smooth(method = "lm", color = "red", se = TRUE) +
+    labs(title = paste (var, "vs Survival Months"), x = var, y = "Survival Months")+    theme_minimal() 
+  plot_list1[[var]] <- p
+}
+grid.arrange(grobs = plot_list1, ncol = 2)
+
+### box plot for Y and categorical variable
+categorical_vars <- c("race","marital_status","t_stage","n_stage","x6th_stage","differentiate","grade","a_stage","estrogen_status", "progesterone_status")
+plot_list2 <- list()
+for (var in categorical_vars) {
+  m<- ggplot(project_2_data, aes_string(x = var, y = "survival_months")) +
+    geom_boxplot(fill = "lightblue", color = "darkblue") +
+    labs(title = paste (var, "vs Survival Months"), x = var, y = "Survival Months") + 
+    theme_minimal()
+  plot_list2[[var]] <- m
+}
+grid.arrange(grobs= plot_list2, ncol = 5)
+
+
+### 1. We get the summary statistics and make the table in excel to have a better format
+### 2. We suggest tumor size to have a square root transformation, further transformation are still needed after finish the modeling using box-cox 
+### 3. there are potential outliers identified but we might ignore them because they are quite limited and we have large sample size
+```
+
+```{r setup}
+library(tidyverse)
+library(survival)
+library(caret)
+#car package for vif
+library(car)
+#MASS package for var selection
+library(MASS)
+
+data <- read.csv("Project_2_data.csv")
+view(data)
+
+
+
+sampledf <- data |>
+  mutate(Status = ifelse(Status == "Dead", 1, 0))
+
+dead <- sampledf |>
+  filter(Status == 1)
+
+alive <- sampledf |>
+  filter(Status == 0) |>
+  sample_n(nrow(dead))
+
+final<-bind_rows(dead, alive) |>
+  dplyr::select(-Survival.Months)
+
+logit_model <- glm(Status ~ ., data = final, family = binomial())
+
+summary(logit_model)
+
+predictions <- predict(logit_model, type = "response")
+
+final$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+confusionMatrix(as.factor(final$predicted_classes), as.factor(final$Status))
+```
+## Assumptions
+```{r multicollinearity}
+#vif(logit_model)
+# there are aliased coefficients in the model > means some vars have perfect multicoll. 
+#cor(sampledf)
+#come back to this
+  
+```
+## Full model diagnostics
+``` {r full model}
+#full model LL 
+logLik(logit_model)
+
+#Diagnostic plots
+plot(logit_model)
+```
+## Variable selection
+
+```{r vars aic}
+#AIC vs. BIC var selection criteria
+#Akaike Info Criterion
+final_aic<-bind_rows(dead, alive) |>
+  dplyr::select(-Survival.Months)
+
+stepAIC(logit_model, trace=0, k = 2)
+#model determined by AIC criterion: minimize AIC for better model fit
+logit_aic <- glm(Status ~ Age + Race + Marital.Status + X6th.Stage + 
+    differentiate + Estrogen.Status + Progesterone.Status + Regional.Node.Examined + 
+    Reginol.Node.Positive, family = binomial(), data = final_aic)
+#log likelihood
+logLik(logit_aic)
+vif(logit_aic)
+#confusion matrix
+predictions_aic <- predict(logit_aic, type = "response")
+final_aic$predicted_classes <- ifelse(predictions_aic > 0.5, 1, 0)
+confusionMatrix(as.factor(final_aic$predicted_classes), as.factor(final_aic$Status))
+```
+```{r bic}
+#Bayesian Info Criterion
+final_bic<-bind_rows(dead, alive) |>
+  dplyr::select(-Survival.Months)
+
+stepAIC(logit_model, trace=0, k = log(nrow(sampledf)))
+#model determined by BIC criterion: minimize BIC for model fit
+logit_bic <- glm(Status ~ differentiate + Progesterone.Status + 
+    Regional.Node.Examined + Reginol.Node.Positive, family = binomial(), 
+    data = final_bic)
+#log likelihood
+logLik(logit_bic)
+
+
+#confusion matrix
+predictions_bic <- predict(logit_bic, type = "response")
+final_bic$predicted_classes <- ifelse(predictions_bic > 0.5, 1, 0)
+confusionMatrix(as.factor(final_bic$predicted_classes), as.factor(final_bic$Status))
+```
+
+```{r diagnostics}
+#make diagnostic plots to address outlying observations and assumptions
+#Diagnostic plot for AIC model
+plot(logit_aic)
+```
+```{r diagnostics 2}
+#Diagnostic plot for BIC model
+plot(logit_bic)
+
+
+#refit models using sensitivity-specificity plots and then check performance and sensitivity/specificity
+```
+
+we can then pick and interpret the best final model
+```{r}
+```
+
+
+## Use the balanced model for regression
+```{r}
+# Load required libraries
+library(tidyverse)
+library(survival)
+library(caret)
+library(car)  # For VIF checks
+library(MASS) # For stepwise variable selection
+library(glmnet)
+
+# Load the balanced dataset
+balance_data <- read.csv("project_2_numdata.csv")
+
+# View dataset structure (optional)
+str(balance_data)
+view(balance_data)
+
+# Summary statistics for numerical variables
+summary(balance_data)
+
+# Visualize distributions of numerical variables
+numerical_vars <- balance_data[, sapply(balance_data, is.numeric)]
+
+# Histograms
+par(mfrow = c(2, 2))  # Arrange multiple plots
+for (col in colnames(numerical_vars)) {
+  hist(numerical_vars[[col]], main = paste("Histogram of", col), xlab = col, col = "lightblue")
+}
+
+# Density plots for more detailed distributions
+for (col in colnames(numerical_vars)) {
+  plot(density(numerical_vars[[col]], na.rm = TRUE), main = paste("Density Plot of", col), xlab = col)
+}
+
+
+```
+
+
+
+```{r}
+balance_data$race <- as.factor(balance_data$race)
+balance_data$marital_status <- as.factor(balance_data$marital_status)
+balance_data$a_stage <- as.factor(balance_data$a_stage)
+
+# Frequency tables
+categorical_vars <- balance_data[, sapply(balance_data, is.factor)]
+
+for (col in colnames(categorical_vars)) {
+  cat("Frequency of", col, ":\n")
+  print(table(categorical_vars[[col]]))
+}
+
+# Bar plots
+par(mfrow = c(2, 2))
+for (col in colnames(categorical_vars)) {
+  barplot(table(categorical_vars[[col]]), main = paste("Barplot of", col), col = "lightgreen")
+}
+
+```
+
+```{r}
+
+library(GGally)
+
+# Correlation matrix
+cor_matrix <- cor(balance_data[, sapply(balance_data, is.numeric)], use = "complete.obs")
+print(cor_matrix)
+
+# Visualize correlations
+library(corrplot)
+corrplot(cor_matrix, method = "circle", main = "Correlation Matrix")
+
+# Pairwise scatterplots for key numerical variables
+pairs(numerical_vars, main = "Pairwise Scatterplots")
+
+ggpairs(numerical_vars, 
+        title = "Pairwise Scatterplots for Numerical Variables",
+        upper = list(continuous = wrap("cor", size = 4)), # Add correlation in upper triangle
+        lower = list(continuous = "smooth"),             # Scatterplot with smooth line
+        diag = list(continuous = "densityDiag"))         # Density plot on diagonal
+```
+
+```{r}
+# Boxplot to examine relationship between a numerical variable and Status
+boxplot(balance_data$tumor_size ~ balance_data$status, main = "Tumor Size by Status", xlab = "Status", ylab = "Tumor Size")
+
+# Barplot for categorical variables vs. Status
+for (col in colnames(categorical_vars)) {
+  table_by_status <- table(balance_data[[col]], balance_data$status)
+  barplot(table_by_status, beside = TRUE, main = paste(col, "by Status"), col = c("lightblue", "pink"))
+}
+```
+
+
+
+```{r}
+# Logistic Regression Full Model
+logit_model_balance <- glm(status ~ ., data = balance_data, family = binomial())
+
+# Model Summary
+summary(logit_model_balance)
+
+# Predictions
+predictions <- predict(logit_model_balance, type = "response")
+
+# Classify Predictions
+balance_data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+
+# Ensure consistent factor levels
+balance_data$predicted_classes <- factor(balance_data$predicted_classes, levels = c(0, 1))
+balance_data$status <- factor(balance_data$status, levels = c(0, 1))
+
+# Confusion Matrix
+confusionMatrix(balance_data$predicted_classes, balance_data$status)
+
+# Variance Inflation Factor (VIF) to detect multicollinearity
+library(car)
+#vif(logit_model_balance)
+
+# Correlation Matrix
+cor_matrix <- cor(balance_data[, sapply(balance_data, is.numeric)], use = "complete.obs")
+print(cor_matrix)
+
+# Log-Likelihood of the Full Model
+logLik(logit_model_balance)
+
+# Diagnostic Plots
+par(mfrow = c(2, 2))
+plot(logit_model_balance)
+par(mfrow = c(1, 1))  # Reset graphical parameters
+```
+
+
+
+## Interaction models!!!
+
+```{r}
+library(fastDummies)
+
+# Create dummy variables for categorical variables
+balance_data_dummies <- dummy_cols(
+  balance_data,
+  select_columns = c("race", "marital_status", "x6th_stage", "a_stage"),
+  remove_first_dummy = TRUE,  # Avoid multicollinearity by removing the first dummy
+  remove_selected_columns = TRUE  # Remove original columns
+)
+
+# View the updated dataset
+head(balance_data_dummies)
+```
+
+
+
+```{r} 
+library(glmnet)
+
+# Load required libraries
+library(MASS)
+
+# Generate all two-way interactions
+formula_with_interactions <- status ~ 
+  (age + grade + tumor_size + estrogen_status + progesterone_status + 
+   regional_node_examined + reginol_node_positive)^2+  + 
+   marital_status_Single + marital_status_Widowed + marital_status_Separated + 
+   x6th_stage_IIB + x6th_stage_IIIA + x6th_stage_IIIB + x6th_stage_IIIC + 
+   a_stage_regional
+# Fit the logistic regression model with the updated formula
+interaction_model <- glm(formula_with_interactions, data = balance_data_dummies, family = binomial())
+
+# View the summary of the model
+summary(interaction_model)
+```
+
+
+```{r}
+# Perform Stepwise Selection (AIC)
+aic_forward_model <- stepAIC(interaction_model, direction = "forward", trace = FALSE)
+aic_backward_model <- stepAIC(interaction_model, direction = "backward", trace = FALSE)
+aic_both_model <- stepAIC(interaction_model, direction = "both", trace = FALSE)
+
+# Perform Stepwise Selection (BIC)
+bic_forward_model <- stepAIC(interaction_model, direction = "forward", trace = FALSE, k = log(nrow(balance_data)))
+bic_backward_model <- stepAIC(interaction_model, direction = "backward", trace = FALSE, k = log(nrow(balance_data)))
+bic_both_model <- stepAIC(interaction_model, direction = "both", trace = FALSE, k = log(nrow(balance_data)))
+
+
+```
+
+```{r}
+# Extract Coefficients for All Models
+extract_coefficients <- function(model, model_name) {
+  summary <- summary(model)
+  coef <- as.data.frame(summary$coefficients)
+  coef$Term <- rownames(coef)
+  coef$Model <- model_name
+  return(coef)
+}
+
+# Create Coefficient Tables
+aic_forward_coef <- extract_coefficients(aic_forward_model, "AIC Forward")
+aic_backward_coef <- extract_coefficients(aic_backward_model, "AIC Backward")
+aic_both_coef <- extract_coefficients(aic_both_model, "AIC Both")
+bic_forward_coef <- extract_coefficients(bic_forward_model, "BIC Forward")
+bic_backward_coef <- extract_coefficients(bic_backward_model, "BIC Backward")
+bic_both_coef <- extract_coefficients(bic_both_model, "BIC Both")
+
+# Merge Results for AIC Models
+aic_combined <- merge(
+  aic_forward_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  aic_backward_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  by = "Term", all = TRUE, suffixes = c("_AIC_Forward", "_AIC_Backward")
+)
+aic_combined <- merge(
+  aic_combined,
+  aic_both_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  by = "Term", all = TRUE
+)
+colnames(aic_combined)[5:8] <- paste0(colnames(aic_combined)[5:8], "_AIC_Both")
+
+# Merge Results for BIC Models
+bic_combined <- merge(
+  bic_forward_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  bic_backward_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  by = "Term", all = TRUE, suffixes = c("_BIC_Forward", "_BIC_Backward")
+)
+bic_combined <- merge(
+  bic_combined,
+  bic_both_coef[, c("Term", "Estimate", "Std. Error", "z value", "Pr(>|z|)")],
+  by = "Term", all = TRUE
+)
+colnames(bic_combined)[5:8] <- paste0(colnames(bic_combined)[5:8], "_BIC_Both")
+
+# Combine AIC and BIC Results
+comparison_table <- merge(aic_combined, bic_combined, by = "Term", all = TRUE)
+
+# Replace NA with 0 for consistency (optional)
+comparison_table[is.na(comparison_table)] <- 0
+library(writexl)   
+# Export the Comparison Table to Excel
+write_xlsx(comparison_table, "aic_bic_stepwise_comparison.xlsx")
+
+# Confirm Export
+cat("The stepwise comparison table has been successfully written to 'aic_bic_stepwise_comparison.xlsx'")
+
+```
+
+```{r}
+library(modelsummary)
+models <- list(
+  "AIC Forward" = aic_forward_model,
+  "AIC Backward" = aic_backward_model,
+  "AIC Stepwise" = aic_both_model,
+  "BIC Forward" = bic_forward_model,
+  "BIC Backward" = bic_backward_model,
+  "BIC Stepwise" = bic_both_model
+)
+modelsummary(models, output = "markdown")
+
+```
+
+
+```{r}
+library(pROC) 
+# Function for Model Evaluation
+evaluate_model <- function(model, data, model_name) {
+  # Log-Likelihood
+  log_likelihood <- logLik(model)
+  cat("Log-Likelihood for", model_name, ":", log_likelihood, "\n")
+  
+  # Predictions
+  predictions <- predict(model, type = "response")
+  data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+  
+  # Ensure Consistent Factor Levels
+  data$predicted_classes <- factor(data$predicted_classes, levels = c(0, 1))
+  data$status <- factor(data$status, levels = c(0, 1))
+  
+  # Confusion Matrix
+  conf_matrix <- confusionMatrix(data$predicted_classes, data$status)
+  cat("Confusion Matrix for", model_name, ":\n")
+  print(conf_matrix)
+  
+  # AUC-ROC
+  roc_curve <- roc(as.numeric(as.character(data$status)), predictions)
+  auc_value <- auc(roc_curve)
+  cat("AUC for", model_name, ":", auc_value, "\n")
+  
+  return(list(conf_matrix = conf_matrix, auc = auc_value, roc_curve = roc_curve))
+}
+
+
+# Evaluate Models
+cat("\n### Evaluating AIC Models ###\n")
+aic_forward_results <- evaluate_model(aic_forward_model, balance_data, "AIC Forward")
+aic_backward_results <- evaluate_model(aic_backward_model, balance_data, "AIC Backward")
+aic_both_results <- evaluate_model(aic_both_model, balance_data, "AIC Stepwise")
+
+cat("\n### Evaluating BIC Models ###\n")
+bic_forward_results <- evaluate_model(bic_forward_model, balance_data, "BIC Forward")
+bic_backward_results <- evaluate_model(bic_backward_model, balance_data, "BIC Backward")
+bic_both_results <- evaluate_model(bic_both_model, balance_data, "BICS tepwise")
+
+# Plot ROC Curves for All Models
+plot(aic_forward_results$roc_curve, col = "blue", lwd = 2, main = "ROC Curves for All Models")
+lines(aic_backward_results$roc_curve, col = "green", lwd = 2)
+lines(aic_both_results$roc_curve, col = "cyan", lwd = 2)
+lines(bic_forward_results$roc_curve, col = "red", lwd = 2)
+lines(bic_backward_results$roc_curve, col = "orange", lwd = 2)
+lines(bic_both_results$roc_curve, col = "purple", lwd = 2)
+
+legend("bottomright", 
+       legend = c("AIC Forward", "AIC Backward", "AIC Both", 
+                  "BIC Forward", "BIC Backward", "BIC Both"),
+       col = c("blue", "green", "cyan", "red", "orange", "purple"), 
+       lwd = 2)
+
+```
+```{r}
+summary(bic_forward_model)
+```
+
+```{r}
+summary(bic_backward_model)
+plot(bic_backward_model)
+```
+
+Evaluate the performance of your modells). ls your model achieving similar performancebetween the majority race group “White" and the minority “Black" (or “Black” + “Other")? lfnot, could you try to improve the fairness (i.e., reducing the gap of prediction performancebetween the majority and minority) of your model(s)?
+```{r}
+library(caret)
+library(pROC)
+
+# Assuming 'race' is your race variable and 'model' is your trained model
+evaluate_performance <- function(data, model, group_name) {
+  # Subset data
+  subset_data <- data[data$race == group_name, ]
+  
+  # Predictions
+  predictions <- predict(bic_backward_model, newdata = subset_data, type = "response")
+  predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+  
+  # Confusion Matrix
+  conf_matrix <- confusionMatrix(factor(predicted_classes), factor(subset_data$status))
+  print(paste("Confusion Matrix for", group_name))
+  print(conf_matrix)
+  
+  # AUC-ROC
+  roc_curve <- roc(subset_data$status, predictions)
+  auc_value <- auc(roc_curve)
+  print(paste("AUC for", group_name, ":", auc_value))
+}
+
+# Evaluate for 'White' group
+evaluate_performance(balance_data, bic_backward_model, "White")
+
+# Evaluate for 'Black' group
+evaluate_performance(balance_data, bic_backward_model, "Black")
+
+# Evaluate for 'Black' + 'Other' group
+evaluate_performance(balance_data, bic_backward_model, c("Black", "Other"))
+```
+
+```{r setup, include=FALSE}
 library(tidyverse)
 library(survival)
 library(car)
@@ -12,7 +748,8 @@ library(ggplot2)
 library(PerformanceAnalytics)
 ```
 
-```{r data input, include=FALSE}
+
+```{r data}
 set.seed(1)
 project_2_data = 
   read_csv("data/project_2_data.csv", na = c("NA", "", ".")) |>
@@ -27,7 +764,7 @@ alive <- project_2_data |>
   filter(status == 0) |>
   sample_n(nrow(dead))
 
-project_2_data<-
+project_2_numdata<-
   bind_rows(dead, alive) |>
   mutate(
     t_stage = case_when(
@@ -60,35 +797,22 @@ project_2_data<-
   select(-a_stage)
 ```
 
+```{r variable selection}
+variables <- names(project_2_numdata)[!names(project_2_numdata) %in% c("survival_months", "status")]
+for (var in variables) {
+  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
+  model <- coxph(formula, data = project_2_numdata)
+  print(var)
+  print(summary(model))
+}
 
-```{r Descriptive_data}
-numerical_vars <- project_2_data[c("age","tumor_size","regional_node_examined","reginol_node_positive","survival_months")]
-summary(numerical_vars)
-
-project_2_data %>%
-  select(where(~!is.numeric(.))) %>%
-  pivot_longer(everything(), names_to = "variable", values_to = "category") %>%
-  count(variable, category) %>%
-  group_by(variable) %>%
-  mutate(proportion = n / sum(n)) %>%
-  ungroup() %>%
-  print()
+ggplot()
 ```
 
-```{r Visualization}
-ggplot(project_2_data, aes(x = survival_months)) +
-  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
-  labs(title = "Distribution of Survival Months", x = "Survival Months", y = "Frequency")
-
-ggplot(project_2_data, aes(x = status)) +
-  geom_bar(fill = "lightcoral") +
-  labs(title = "Distribution of Status", x = "Status", y = "Count")
-
-```
-
+All variables are statistically significant except for marriage in "marital_status" 
 ```{r Multicollinearity}
-project_2_data <-
-  project_2_data|>
+project_2_numdata <-
+  project_2_numdata|>
   mutate(Married = ifelse(marital_status == "Married", 1, 0)) |>
   select(-differentiate, - marital_status)
 
@@ -102,12 +826,357 @@ cortable$regional_node_examined
 chart.Correlation(cortable, histogram=TRUE, pch=19)
 ```
 
-```{r variable selection}
-variables <- names(project_2_numdata)[!names(project_2_numdata) %in% c("survival_months", "status")]
-for (var in variables) {
-  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
-  model <- coxph(formula, data = project_2_numdata)
-  print(var)
-  print(summary(model))
+We have to choice 1 between 
+t_stage - tumor size
+n stage - regional_node_positive
+
+```{r Multicollinearity continuous}
+muldata = project_2_numdata
+  
+  
+cox_model <- coxph(Surv(survival_months, status) ~.,
+                   data = muldata)
+
+vifs <- vif(cox_model)  
+print(vifs)
+```
+remove t-stage，n_stage and regional_mode_positive due to higher VIF score
+
+```{r final data account for multicolliinearity}
+final = muldata |>
+  select(-t_stage, -n_stage,-reginol_node_positive)
+
+cox_model1 <- coxph(Surv(survival_months, status) ~.,
+                   data = final)
+ph_test <- cox.zph(cox_model1)
+print(ph_test)
+
+vifs <- vif(cox_model1)
+print(vifs)
+summary(cox_model)
+```
+
+
+```{r forward }
+ph_test <- cox.zph(cox_model1)
+print(ph_test)
+
+phob<- final|>
+  select(-progesterone_status, -estrogen_status)|>
+  mutate(log_tumor = log2(tumor_size+1), log_regional_node_examined=log2(regional_node_examined+1))
+
+
+nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = phob)
+fullmodel <- coxph(Surv(survival_months, status) ~ ., data = phob)
+
+forward_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "forward", trace = TRUE)
+backward_model <- step(fullmodel, direction = "backward", trace = TRUE) 
+stepwise_model <- step(nullmodel, scope=list(lower=nullmodel, upper=fullmodel), direction="both")
+ph_test <- cox.zph(forward_model)
+print(ph_test)
+forward_model
+backward_model
+stepwise_model
+
+```
+
+```{r lasso }
+library(glmnet)
+library(survival)
+predictors <- model.matrix(~ age + race + x6th_stage + log_tumor + log_regional_node_examined + a_stage_regional + Married - 1, data = phob)
+predictors_scaled <- scale(predictors)
+response <- with(phob, Surv(survival_months, as.numeric(status)))
+cv_lasso <- cv.glmnet(predictors_scaled, response, family = "cox", alpha = 1, type.measure = "deviance", nfolds = 10)
+plot(cv_lasso)
+best_lambda <- cv_lasso$lambda.min
+final_lasso_model <- glmnet(predictors_scaled, response, family = "cox", alpha = 1, lambda = best_lambda)
+lasso_coefficients <- coef(final_lasso_model)
+print(lasso_coefficients)
+
+```
+
+
+```{r phtest }
+ph_test <- cox.zph(cox_model1)
+print(ph_test)
+plot(ph_test) 
+ph_test <- cox.zph(cox_model1)
+```
+
+The Cox model assumes that hazard ratios are constant over time. A non-significant p-value (p > 0.05) indicates that the PH assumption holds. As GLOBAL 47.176 15 1.8e-05, the model did not meet the assumption, as same as estrogen_status and progesterone_status.We need further improve our model.
+
+
+```{r model2}
+
+cox_model2 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            tumor_size + regional_node_examined + a_stage_regional+Married,
+                            data = final,x = TRUE)
+summary(cox_model2)
+```
+
+```{r }
+ph_test <- cox.zph(cox_model2)
+print(ph_test)
+plot(ph_test) 
+```
+now the assumption is been fully achieved after delete estrogen_status and progesterone_status
+
+```{r model3 }
+cox_model3 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(tumor_size+1) + log2(regional_node_examined+1)                                            +a_stage_regional + Married,
+                            data = final)
+summary(cox_model3)
+```
+Add log transformation to the tumor size and regional node_examined, now they are being statistically significant
+
+```{r model4 }
+cox_model4 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(tumor_size+1) + log2(regional_node_examined+1) +                                          +a_stage_regional+ Married + Married*log2(regional_node_examined+1),
+                            data = final)
+summary(cox_model4)
+
+cox_model4
+```
+Noticing married seems insignificant in every variable, we tried to add interaction term with married and all the remaining variables, but the interaction term are all insignificant as well as the main marriage effect except for the interaction between married and log2(regional_node_examined) make the married main effect being statisticlally significant under 0.05 level
+
+
+```{r model5 }
+# Fit a stratified Cox model
+cox_model_strat <- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + 
+                         log2(tumor_size + 1) + log2(regional_node_examined + 1) +
+                         a_stage_regional + Married + Married * log2(regional_node_examined + 1) +
+                         strata(race), data = final)
+
+# Summary of the stratified model
+summary(cox_model_strat)
+
+```
+Since the interaction term gives no significant significant value, we directly drop the marriage variable
+
+
+
+```{r }
+cox_model6 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                            log2(regional_node_examined+1),
+                            data = final)
+summary(cox_model6)
+cox_model6
+
+test_ph <- cox.zph(cox_model5)
+print(test_ph)
+plot(test_ph)
+
+library(survival)
+dfbetas_cox <- dfbeta(coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade +
+                            log2(tumor_size + 1) + log2(regional_node_examined + 1) + a_stage_regional, 
+                            data = final))
+plot(dfbetas_cox, main="DFBETAs for each Covariate in the Cox Model")
+
+```
+
+further drop variables tumor_size and a_stage_regional due to quite low significant value.
+
+
+Model Evaluation
+```{r }
+summary(final$survival_months)
+```
+
+
+
+
+```{r }
+library(timeROC)
+cox_models <- list(cox_model3, cox_model4, cox_model6)
+
+time_points <- c(2,43,62,82,107)
+
+dynamic_auc_results <- list()
+
+for (i in 1:length(cox_models)) {
+  
+  current_model <- cox_models[[i]]
+  time_roc <- timeROC(T = final$survival_months, 
+                    delta = final$status, 
+                    marker = predict(current_model, type = "lp"), 
+                    cause = 1,  # Event of interest
+                    times = time_points,  # Time points
+                    iid = TRUE)
+
+  
+  dynamic_auc_results[[paste0("Model_", i)]] <- time_roc$AUC
+  
+  print(paste("AUC for Model", i, "at time points:", paste(time_points, collapse = ", ")))
+  print(round(time_roc$AUC, 3))
 }
+
+library(survivalROC)
+eval_times <- quantile(final$survival_months[final$status == 1], probs = c(0.25, 0.5, 0.75))
+library(survivalROC)
+
+strata <- with(final, status == 1)  # or another strata definition if needed
+eval_time <-  62
+
+roc_result <- survivalROC(Stime = final$survival_months, status = strata, 
+                          marker = risk_predictions_model4, predict.time = eval_time, 
+                          method = "KM")
+
+plot(roc_result$FP, roc_result$TP, type = "l", col = "blue",
+     xlab = "False Positive Rate", ylab = "True Positive Rate",
+     main = paste("ROC Curve at", eval_time, "Days"))
+points(roc_result$FP, roc_result$TP, pch = 19, col = "red")
+text(0.5, 0.5, paste("AUC =", round(roc_result$AUC, 3)))
+
+roc_result$TP  
+1 - roc_result$FP 
+
+# Assuming you have extracted or can calculate specificity from the FP rate:
+specificity <- 1 - roc_result$FP
+
+# Prepare the plot
+plot(roc_result$cut.values, roc_result$TP, type = "l", col = "blue", xlab = "Thresholds", ylab = "Rate",
+     main = "Sensitivity and Specificity over Thresholds")
+lines(roc_result$cut.values, specificity, col = "red")
+legend("bottomright", legend = c("Sensitivity", "Specificity"), col = c("blue", "red"), lty = 1)
+points(roc_result$cut.values, roc_result$TP, pch = 19, col = "blue")  # Add points for sensitivity
+points(roc_result$cut.values, specificity, pch = 19, col = "red")  # Add points for specificity
+
+
+
+library(survivalROC)
+strata <- with(final, status == 1)  # Define event occurrence correctly
+eval_time <- 62  # For example, evaluating at 1 year
+
+roc_result <- survivalROC(Stime = final$survival_months, status = strata,
+                          marker = risk_predictions_model4, predict.time = eval_time,
+                          method = "KM")
+
+# Extracting sensitivity and specificity
+roc_result$TP
+survival_specificity <- 1 - roc_result$FP  # Calculating specificity from FPR
+
+```
+
+model 4 tends to have a relatively higher AUC throughout different time points
+
+C-index
+
+```{r check }
+cox_model4$concordance
+cox_model6$concordance
+forward_model$concordance
+
+cox_model3
+cox_model4
+cox_model6
+AIC(cox_model4)
+AIC(cox_model6)
+AIC(forward_model)
+
+BIC(cox_model4)
+BIC(cox_model6)
+BIC(forward_model)
+```
+
+
+Concordance:
+model1 69.4
+model2 67.0
+model3 67.2
+model4 69.6 (overall account for meeting the model assumption and the multicollinearity, model 4 have the highest concordance score, although accompanied with "married" variable that is not statistically significant)
+model5 67.0
+model6 66.8
+
+```{r outliers }
+dev_residuals <- residuals(cox_model4, type = "deviance")
+plot(dev_residuals, main = "Deviance Residuals", ylab = "Residuals", xlab = "Index")
+abline(h = c(-2, 2), col = "red", lty = 2) 
+
+surv_fit <- survfit(Surv(survival_months, status) ~ 1, data = final)
+
+plot(surv_fit, xlab = "Time (months)", ylab = "Survival Probability", 
+     main = "Survival Curve for the Final Model", col = "blue", lwd = 2)
+
+grid()
+
+write.csv(final, "data/final.csv", row.names = FALSE)
+```
+
+
+
+```{r outliers }
+
+predicted_hazards <- predict(cox_model4, type = "risk")
+final$predicted_scores = predicted_hazards
+
+
+```
+
+```{r outliers }
+
+time_points <-  c(2,43,62,82,107)
+
+compute_auc <- function(data, time_point) {
+    roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
+                            marker = data$lp, predict.time = time_point, method = "KM")
+    return(roc_data$AUC)
+}
+
+data_white <- final[final$race == "White", ]
+data_black <- final[final$race == "Black", ]
+data_black_other <- final[final$race %in% c("Black", "Other"), ]
+
+auc_white <- sapply(time_points, function(t) compute_auc(data_white, t))
+auc_black <- sapply(time_points, function(t) compute_auc(data_black, t))
+auc_black_other <- sapply(time_points, function(t) compute_auc(data_black_other, t))
+
+# Print the results
+print("Time-dependent AUC for White group:")
+print(auc_white)
+
+print("Time-dependent AUC for black group:")
+print(auc_black)
+
+print("Time-dependent AUC for Black/Other group:")
+print(auc_black_other)
+
+```
+
+```{r outliers }
+# Calculate quantiles for each group
+quantiles_white <- quantile(final$survival_months[final$race == "White"], probs = c(0, 0.25, 0.5, 0.75,1))
+quantiles_black <- quantile(final$survival_months[final$race == "Black"], probs = c(0, 0.25, 0.5, 0.75,1))
+quantiles_blackother <- quantile(final$survival_months[final$race %in% c("Black", "Other")], probs = c(0, 0.25, 0.5, 0.75,1))
+
+data_white <- final[final$race == "White", ]
+data_black <- final[final$race == "Black", ]
+data_black_other <- final[final$race %in% c("Black", "Other"), ]
+
+# Define a function to calculate AUC at given quantiles
+compute_auc_quantiles <- function(data, quantiles) {
+    sapply(quantiles, function(t) {
+        roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
+                                marker = data$lp, predict.time = t, method = "KM")
+        return(roc_data$AUC)
+    })
+}
+
+
+# Compute AUC at each group's quantiles
+auc_white_quantiles <- compute_auc_quantiles(data_white, quantiles_white)
+auc_black_quantiles <- compute_auc_quantiles(data_black, quantiles_black)
+auc_blackother_quantiles <- compute_auc_quantiles(data_black_other, quantiles_blackother)
+
+# Print AUC results for quantiles
+print("AUC for White group at their quantiles:")
+print(auc_white_quantiles)
+
+
+print("AUC for Black group at their quantiles:")
+print(auc_black_quantiles)
+
+print("AUC for BlackOther group at their quantiles:")
+print(auc_blackother_quantiles)
+
+
 ```
