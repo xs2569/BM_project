@@ -74,8 +74,6 @@ ggplot()
 ```
 
 All variables are statistically significant except for marriage in "marital_status" 
-```
-
 ```{r Multicollinearity}
 project_2_numdata <-
   project_2_numdata|>
@@ -91,6 +89,7 @@ cortable<-project_2_numdata|>
 cortable$regional_node_examined
 chart.Correlation(cortable, histogram=TRUE, pch=19)
 ```
+
 We have to choice 1 between 
 t_stage - tumor size
 n stage - regional_node_positive
@@ -120,6 +119,8 @@ vifs <- vif(cox_model1)
 print(vifs)
 summary(cox_model)
 ```
+
+
 ```{r forward }
 ph_test <- cox.zph(cox_model1)
 print(ph_test)
@@ -143,7 +144,7 @@ stepwise_model
 
 ```
 
-```{r lasso}
+```{r lasso }
 library(glmnet)
 library(survival)
 predictors <- model.matrix(~ age + race + x6th_stage + log_tumor + log_regional_node_examined + a_stage_regional + Married - 1, data = phob)
@@ -159,7 +160,7 @@ print(lasso_coefficients)
 ```
 
 
-```{r phtest}
+```{r phtest }
 ph_test <- cox.zph(cox_model1)
 print(ph_test)
 plot(ph_test) 
@@ -177,14 +178,14 @@ cox_model2 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + gr
 summary(cox_model2)
 ```
 
-```{r}
+```{r }
 ph_test <- cox.zph(cox_model2)
 print(ph_test)
 plot(ph_test) 
 ```
 now the assumption is been fully achieved after delete estrogen_status and progesterone_status
 
-```{r model3}
+```{r model3 }
 cox_model3 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
                             log2(tumor_size+1) + log2(regional_node_examined+1)                                            +a_stage_regional + Married,
                             data = final)
@@ -192,7 +193,7 @@ summary(cox_model3)
 ```
 Add log transformation to the tumor size and regional node_examined, now they are being statistically significant
 
-```{r model4}
+```{r model4 }
 cox_model4 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
                             log2(tumor_size+1) + log2(regional_node_examined+1) +                                          +a_stage_regional+ Married + Married*log2(regional_node_examined+1),
                             data = final)
@@ -203,7 +204,7 @@ cox_model4
 Noticing married seems insignificant in every variable, we tried to add interaction term with married and all the remaining variables, but the interaction term are all insignificant as well as the main marriage effect except for the interaction between married and log2(regional_node_examined) make the married main effect being statisticlally significant under 0.05 level
 
 
-```{r model5}
+```{r model5 }
 # Fit a stratified Cox model
 cox_model_strat <- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + 
                          log2(tumor_size + 1) + log2(regional_node_examined + 1) +
@@ -218,7 +219,7 @@ Since the interaction term gives no significant significant value, we directly d
 
 
 
-```{r}
+```{r }
 cox_model6 <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
                             log2(regional_node_examined+1),
                             data = final)
@@ -241,14 +242,14 @@ further drop variables tumor_size and a_stage_regional due to quite low signific
 
 
 Model Evaluation
-```{r}
+```{r }
 summary(final$survival_months)
 ```
 
 
 
 
-```{r}
+```{r }
 library(timeROC)
 cox_models <- list(cox_model3, cox_model4, cox_model6)
 
@@ -324,7 +325,7 @@ model 4 tends to have a relatively higher AUC throughout different time points
 
 C-index
 
-```{r check}
+```{r check }
 cox_model4$concordance
 cox_model6$concordance
 forward_model$concordance
@@ -350,7 +351,7 @@ model4 69.6 (overall account for meeting the model assumption and the multicolli
 model5 67.0
 model6 66.8
 
-```{r outliers}
+```{r outliers }
 dev_residuals <- residuals(cox_model4, type = "deviance")
 plot(dev_residuals, main = "Deviance Residuals", ylab = "Residuals", xlab = "Index")
 abline(h = c(-2, 2), col = "red", lty = 2) 
@@ -361,4 +362,48 @@ plot(surv_fit, xlab = "Time (months)", ylab = "Survival Probability",
      main = "Survival Curve for the Final Model", col = "blue", lwd = 2)
 
 grid()
+
+write.csv(final, "data/final.csv", row.names = FALSE)
 ```
+
+
+
+```{r outliers }
+
+predicted_hazards <- predict(cox_model4, type = "risk")
+final$predicted_scores = predicted_hazards
+
+
+```
+
+```{r outliers }
+
+time_points <-  c(2,43,62,82,107)
+
+compute_auc <- function(data, time_point) {
+    roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
+                            marker = data$lp, predict.time = time_point, method = "KM")
+    return(roc_data$AUC)
+}
+
+data_white <- final[final$race == "White", ]
+data_black <- final[final$race %in% c("Black", "Other"), ]
+data_black_other <- final[final$race %in% c("Black", "Other"), ]
+
+auc_white <- sapply(time_points, function(t) compute_auc(data_white, t))
+auc_black <- sapply(time_points, function(t) compute_auc(data_black, t))
+auc_black_other <- sapply(time_points, function(t) compute_auc(data_black_other, t))
+
+# Print the results
+print("Time-dependent AUC for White group:")
+print(auc_white)
+
+print("Time-dependent AUC for black group:")
+print(auc_black)
+
+print("Time-dependent AUC for Black/Other group:")
+print(auc_black_other)
+
+```
+
+
