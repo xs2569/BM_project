@@ -94,8 +94,34 @@ balance_df <- bind_rows(dead, alive)
 ggplot(balance_df, aes(x = status)) + geom_bar() + labs(title = "Balanced Dataset")
 
 ```
+logistic without interaction
+```{r}
+# Full logistic regression model
+logit_model <- glm(status ~ ., data = balance_df, family = binomial())
+summary(logit_model)
 
+# Variable selection: AIC and BIC
+aic_model <- stepAIC(logit_model, trace = FALSE)
+bic_model <- stepAIC(logit_model, k = log(nrow(balance_df)), trace = FALSE)
 
+# Model performance
+evaluate_model <- function(model, data, model_name) {
+  predictions <- predict(model, type = "response")
+  data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+  conf_matrix <- confusionMatrix(factor(data$predicted_classes), factor(data$status))
+  roc_curve <- roc(data$status, predictions)
+  list(
+    LogLikelihood = logLik(model),
+    ConfusionMatrix = conf_matrix,
+    AUC = auc(roc_curve)
+  )
+}
+
+logit_results_aic <- evaluate_model(aic_model, balance_df, "AIC Model")
+logit_results_bic <- evaluate_model(bic_model, balance_df, "BIC Model")
+
+```
+interation logistic!!!!
 ```{r}
 
 library(fastDummies)
@@ -126,7 +152,7 @@ interaction_model <- glm(formula_with_interactions, data = balance_data_dummies,
 summary(interaction_model)
 
 ```
-
+Model Selection with Stepwise Approaches
 ```{r}
 # Perform Stepwise Selection (AIC)
 aic_forward_model <- stepAIC(interaction_model, direction = "forward", trace = FALSE)
@@ -220,6 +246,76 @@ legend("bottomright",
        legend = c("AIC Forward", "AIC Backward", "AIC Both", "BIC Forward", "BIC Backward", "BIC Both"),
        col = c("blue", "green", "cyan", "red", "orange", "purple"), 
        lwd = 2)
+
+```
+Fairness Evaluation
+```{r}
+evaluate_performance <- function(data, model, group_name) {
+  subset_data <- data |> filter(race %in% group_name)
+  predictions <- predict(model, newdata = subset_data, type = "response")
+  predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+  conf_matrix <- confusionMatrix(factor(predicted_classes), factor(subset_data$status))
+  roc_curve <- roc(subset_data$status, predictions)
+  
+  list(
+    ConfusionMatrix = conf_matrix,
+    AUC = auc(roc_curve)
+  )
+}
+
+# Evaluate performance for different racial groups
+white_results <- evaluate_performance(balance_data, bic_backward_model, "White")
+black_results <- evaluate_performance(balance_data, bic_backward_model, "Black")
+black_other_results <- evaluate_performance(balance_data, bic_backward_model, c("Black", "Other"))
+
+list(
+  White = white_results,
+  Black = black_results,
+  Black_Other = black_other_results
+)
+
+```
+
+Survival Analysis Models
+```{r}
+# Cox proportional hazards model
+cox_model <- coxph(Surv(survival_months, status) ~ age + grade + log_tumor_size + log_regional_node_examined + x6th_stage + a_stage_regional, data = project_2_data)
+summary(cox_model)
+
+# Stepwise variable selection (AIC and BIC)
+cox_aic <- step(cox_model, direction = "both", trace = FALSE)
+cox_bic <- stepAIC(cox_model, k = log(nrow(project_2_data)), trace = FALSE)
+
+# Time-dependent AUC
+compute_auc <- function(data, model, time_point) {
+  predictions <- predict(model, newdata = data, type = "risk")
+  survivalROC(Stime = data$survival_months, status = data$status, marker = predictions, predict.time = time_point, method = "KM")$AUC
+}
+
+# Evaluate for different time points
+time_points <- c(25, 50, 75)
+auc_results <- sapply(time_points, function(tp) compute_auc(project_2_data, cox_model, tp))
+auc_results
+
+```
+
+Comparison and Fairness Check
+```{r}
+# Evaluate AUC across race groups
+evaluate_auc_by_race <- function(data, model, race_group, time_points) {
+  subset_data <- data |> filter(race %in% race_group)
+  sapply(time_points, function(tp) compute_auc(subset_data, model, tp))
+}
+
+auc_white <- evaluate_auc_by_race(project_2_data, cox_model, "White", time_points)
+auc_black <- evaluate_auc_by_race(project_2_data, cox_model, "Black", time_points)
+auc_black_other <- evaluate_auc_by_race(project_2_data, cox_model, c("Black", "Other"), time_points)
+
+list(
+  White = auc_white,
+  Black = auc_black,
+  Black_Other = auc_black_other
+)
 
 ```
 
