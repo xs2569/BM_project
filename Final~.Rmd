@@ -421,21 +421,40 @@ BIC(Par_model)
 
 Comparison and Fairness Check
 ```{r}
-# Evaluate AUC across race groups
-evaluate_auc_by_race <- function(data, model, race_group, time_points) {
-  subset_data <- data |> filter(race %in% race_group)
-  sapply(time_points, function(tp) compute_auc(subset_data, model, tp))
+# Compute survival quantiles for each race group
+quantiles_white <- quantile(final$survival_months[final$race == "White"], probs = c(0, 0.25, 0.5, 0.75, 1))
+quantiles_black <- quantile(final$survival_months[final$race == "Black"], probs = c(0, 0.25, 0.5, 0.75, 1))
+quantiles_blackother <- quantile(final$survival_months[final$race %in% c("Black", "Other")], probs = c(0, 0.25, 0.5, 0.75, 1))
+
+# Subset data by race groups
+data_white <- final[final$race == "White", ]
+data_black <- final[final$race == "Black", ]
+data_black_other <- final[final$race %in% c("Black", "Other"), ]
+
+# Function to compute AUC at specific quantiles
+compute_auc_quantiles <- function(data, quantiles) {
+    sapply(quantiles, function(t) {
+        roc_data <- survivalROC(Stime = data$survival_months, status = data$status,
+                                marker = data$predicted_scores, predict.time = t, method = "KM")
+        return(roc_data$AUC)
+    })
 }
 
-auc_white <- evaluate_auc_by_race(project_2_data, cox_model, "White", time_points)
-auc_black <- evaluate_auc_by_race(project_2_data, cox_model, "Black", time_points)
-auc_black_other <- evaluate_auc_by_race(project_2_data, cox_model, c("Black", "Other"), time_points)
+# Calculate AUC for each group at quantiles
+auc_white <- compute_auc_quantiles(data_white, quantiles_white)
+auc_black <- compute_auc_quantiles(data_black, quantiles_black)
+auc_black_other <- compute_auc_quantiles(data_black_other, quantiles_blackother)
 
-list(
-  White = auc_white,
-  Black = auc_black,
-  Black_Other = auc_black_other
-)
+# Print results
+cat("Time-dependent AUC for White group:\n")
+print(auc_white)
+
+cat("Time-dependent AUC for Black group:\n")
+print(auc_black)
+
+cat("Time-dependent AUC for Black/Other group:\n")
+print(auc_black_other)
+
 
 ```
 
