@@ -95,8 +95,131 @@ ggplot(balance_df, aes(x = status)) + geom_bar() + labs(title = "Balanced Datase
 
 ```
 
+
 ```{r}
 
+library(fastDummies)
+
+# Create dummy variables for categorical variables
+balance_data_dummies <- dummy_cols(
+  balance_data,
+  select_columns = c("race", "marital_status", "x6th_stage", "a_stage"),
+  remove_first_dummy = TRUE,  # Avoid multicollinearity by removing the first dummy
+  remove_selected_columns = TRUE  # Remove original columns
+)
+
+# View the updated dataset
+head(balance_data_dummies)
+
+# Generate all two-way interactions
+formula_with_interactions <- status ~ 
+  (age + grade + tumor_size + estrogen_status + progesterone_status + 
+   regional_node_examined + reginol_node_positive)^2 + 
+   marital_status_Single + marital_status_Widowed + marital_status_Separated + 
+   x6th_stage_IIB + x6th_stage_IIIA + x6th_stage_IIIB + x6th_stage_IIIC + 
+   a_stage_regional
+
+# Fit the logistic regression model with interaction terms
+interaction_model <- glm(formula_with_interactions, data = balance_data_dummies, family = binomial())
+
+# Summary of the model
+summary(interaction_model)
+
+```
+
+```{r}
+# Perform Stepwise Selection (AIC)
+aic_forward_model <- stepAIC(interaction_model, direction = "forward", trace = FALSE)
+aic_backward_model <- stepAIC(interaction_model, direction = "backward", trace = FALSE)
+aic_both_model <- stepAIC(interaction_model, direction = "both", trace = FALSE)
+
+# Perform Stepwise Selection (BIC)
+bic_forward_model <- stepAIC(interaction_model, direction = "forward", trace = FALSE, k = log(nrow(balance_data)))
+bic_backward_model <- stepAIC(interaction_model, direction = "backward", trace = FALSE, k = log(nrow(balance_data)))
+bic_both_model <- stepAIC(interaction_model, direction = "both", trace = FALSE, k = log(nrow(balance_data)))
+
+```
+Coefficient Extraction and Export
+```{r}
+# Extract coefficients from models
+extract_coefficients <- function(model, model_name) {
+  coef <- as.data.frame(summary(model)$coefficients)
+  coef$Term <- rownames(coef)
+  coef$Model <- model_name
+  return(coef)
+}
+
+# Combine coefficients from AIC and BIC models
+aic_combined <- merge(
+  extract_coefficients(aic_forward_model, "AIC Forward"),
+  extract_coefficients(aic_backward_model, "AIC Backward"),
+  by = "Term", all = TRUE, suffixes = c("_AIC_Forward", "_AIC_Backward")
+)
+
+aic_combined <- merge(
+  aic_combined,
+  extract_coefficients(aic_both_model, "AIC Both"),
+  by = "Term", all = TRUE
+)
+
+bic_combined <- merge(
+  extract_coefficients(bic_forward_model, "BIC Forward"),
+  extract_coefficients(bic_backward_model, "BIC Backward"),
+  by = "Term", all = TRUE, suffixes = c("_BIC_Forward", "_BIC_Backward")
+)
+
+bic_combined <- merge(
+  bic_combined,
+  extract_coefficients(bic_both_model, "BIC Both"),
+  by = "Term", all = TRUE
+)
+
+# Combine AIC and BIC results into one table
+comparison_table <- merge(aic_combined, bic_combined, by = "Term", all = TRUE)
+
+# Replace NA with 0 for consistency
+comparison_table[is.na(comparison_table)] <- 0
+
+# Export the table
+write_xlsx(comparison_table, "aic_bic_stepwise_comparison.xlsx")
+cat("Comparison table exported to 'aic_bic_stepwise_comparison.xlsx'")
+
+```
+Model Evaluation
+```{r}
+evaluate_model <- function(model, data, model_name) {
+  predictions <- predict(model, type = "response")
+  data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+  conf_matrix <- confusionMatrix(factor(data$predicted_classes), factor(data$status))
+  roc_curve <- roc(data$status, predictions)
+  
+  list(
+    LogLikelihood = logLik(model),
+    ConfusionMatrix = conf_matrix,
+    AUC = auc(roc_curve)
+  )
+}
+
+# Evaluate AIC and BIC Models
+aic_forward_results <- evaluate_model(aic_forward_model, balance_data, "AIC Forward")
+aic_backward_results <- evaluate_model(aic_backward_model, balance_data, "AIC Backward")
+aic_both_results <- evaluate_model(aic_both_model, balance_data, "AIC Stepwise")
+bic_forward_results <- evaluate_model(bic_forward_model, balance_data, "BIC Forward")
+bic_backward_results <- evaluate_model(bic_backward_model, balance_data, "BIC Backward")
+bic_both_results <- evaluate_model(bic_both_model, balance_data, "BIC Stepwise")
+
+# Plot ROC Curves
+plot(aic_forward_results$roc_curve, col = "blue", lwd = 2, main = "ROC Curves for All Models")
+lines(aic_backward_results$roc_curve, col = "green", lwd = 2)
+lines(aic_both_results$roc_curve, col = "cyan", lwd = 2)
+lines(bic_forward_results$roc_curve, col = "red", lwd = 2)
+lines(bic_backward_results$roc_curve, col = "orange", lwd = 2)
+lines(bic_both_results$roc_curve, col = "purple", lwd = 2)
+
+legend("bottomright", 
+       legend = c("AIC Forward", "AIC Backward", "AIC Both", "BIC Forward", "BIC Backward", "BIC Both"),
+       col = c("blue", "green", "cyan", "red", "orange", "purple"), 
+       lwd = 2)
 
 ```
 
