@@ -320,8 +320,8 @@ Survival Analysis Models
 ### Multicollinearity Analysis
 
 cox_model <- coxph(Surv(survival_months, status) ~ .-a_stage -differentiate, data = balance_data)
-#vifs <- vif(cox_model)
-#print(vifs)
+vifs <- vif(cox_model)
+print(vifs)
 
 # Remove variables with high VIF scores
 balance_data <- balance_data |> 
@@ -347,19 +347,13 @@ balance_data <- balance_data |>
 ```
 Assumption Testing
 ```{r}
-# Evaluate each variable individually
-variables <- names(balance_data)[!names(balance_data) %in% c("survival_months", "status")]
-for (var in variables) {
-  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
-  model <- coxph(formula, data = balance_data)
-  print(var)
-  print(summary(model))
-}
+ph_model <- coxph(Surv(survival_months, status) ~ ., data = balance_data)
+ph_test <- cox.zph(ph_model)
+print(ph_test)
 
-# Recode and select relevant variables
-balance_data <- balance_data |> 
-  mutate(Married = ifelse(marital_status == "Married", 1, 0)) |> 
-  dplyr::select(-marital_status)
+# Remove variables that violate assumptions
+final <- balance_data |> 
+  dplyr::select(-progesterone_status, -estrogen_status)
 
 ```
 Model Fitting
