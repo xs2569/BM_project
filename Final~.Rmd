@@ -45,8 +45,7 @@ project_2_data <- read_csv("Project_2_data.csv", na = c("NA", "", ".")) |>
     estrogen_status = ifelse(estrogen_status == "Positive", 1, 0),
     progesterone_status = ifelse(progesterone_status == "Positive", 1, 0)
   ) |>
-  select(-a_stage) |>
-  na.omit()
+  stats::na.omit()
 
 # Check missingness and descriptive statistics
 summary(project_2_data)
@@ -78,8 +77,8 @@ cor_matrix <- cor(project_2_data[, sapply(project_2_data, is.numeric)], use = "c
 corrplot(cor_matrix, method = "circle")
 
 # Drop high VIF variables
-project_2_data <- project_2_data |>
-  select(-c(t_stage, n_stage, reginol_node_positive, differentiate))
+##project_2_data <- project_2_data |>
+##  dpyler::select(-c(t_stage, n_stage, reginol_node_positive, differentiate))
 
 
 ```
@@ -88,21 +87,21 @@ project_2_data <- project_2_data |>
 # Balance the dataset
 dead <- project_2_data |> filter(status == 1)
 alive <- project_2_data |> filter(status == 0) |> sample_n(nrow(dead))
-balance_df <- bind_rows(dead, alive)
+balance_data <- bind_rows(dead, alive)
 
 # Visualize balance
-ggplot(balance_df, aes(x = status)) + geom_bar() + labs(title = "Balanced Dataset")
+ggplot(balance_data, aes(x = status)) + geom_bar() + labs(title = "Balanced Dataset")
 
 ```
 logistic without interaction
 ```{r}
 # Full logistic regression model
-logit_model <- glm(status ~ ., data = balance_df, family = binomial())
+logit_model <- glm(status ~ ., data = balance_data, family = binomial())
 summary(logit_model)
 
 # Variable selection: AIC and BIC
 aic_model <- stepAIC(logit_model, trace = FALSE)
-bic_model <- stepAIC(logit_model, k = log(nrow(balance_df)), trace = FALSE)
+bic_model <- stepAIC(logit_model, k = log(nrow(balance_data)), trace = FALSE)
 
 # Model performance
 evaluate_model <- function(model, data, model_name) {
@@ -117,8 +116,8 @@ evaluate_model <- function(model, data, model_name) {
   )
 }
 
-logit_results_aic <- evaluate_model(aic_model, balance_df, "AIC Model")
-logit_results_bic <- evaluate_model(bic_model, balance_df, "BIC Model")
+logit_results_aic <- evaluate_model(aic_model, balance_data, "AIC Model")
+logit_results_bic <- evaluate_model(bic_model, balance_data, "BIC Model")
 
 ```
 interation logistic!!!!
