@@ -22,6 +22,7 @@ library(MASS)
 library(writexl)
 library(corrplot)
 library(survivalROC)
+library(timeROC)
 set.seed(1)
 ```
 
@@ -408,6 +409,34 @@ BIC(fullmodel)
 BIC(Inter_model)
 BIC(Par_model)
 ```
+
+
+```{r}
+#AUC diagnostic for different quentile time for 3 model
+cox_models <- list(fullmodel, Inter_model, Par_model)
+
+time_points <- c(2,43,62,82,107)
+
+dynamic_auc_results <- list()
+
+for (i in 1:length(cox_models)) {
+  
+  current_model <- cox_models[[i]]
+  time_roc <- timeROC(T = final$survival_months, 
+                    delta = final$status, 
+                    marker = predict(current_model, type = "lp"), 
+                    cause = 1,  
+                    times = time_points,  
+                    iid = TRUE)
+
+  
+  dynamic_auc_results[[paste0("Model_", i)]] <- time_roc$AUC
+  
+  print(paste("AUC for Model", i, "at time points:", paste(time_points, collapse = ", ")))
+  print(round(time_roc$AUC, 3))
+}
+```
+
 ```{r}
 dev_residuals <- residuals(Inter_model, type = "deviance")
 plot(dev_residuals, main = "Deviance Residuals", ylab = "Residuals", xlab = "Index")
@@ -422,6 +451,9 @@ plot(surv_fit, xlab = "Time (months)", ylab = "Survival Probability",
 grid()
 ```
 
+```{r}
+cox.zph(Inter_model)
+```
 
 Comparison and Fairness Check
 ```{r}
