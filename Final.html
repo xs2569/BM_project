@@ -1643,66 +1643,7 @@ summary(fullmodel)</code></pre>
 nullmodel &lt;- coxph(Surv(survival_months, status) ~ 1, data = final)
 forward_model &lt;- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = &quot;forward&quot;, trace = FALSE)
 backward_model &lt;- step(fullmodel, direction = &quot;backward&quot;, trace = FALSE)
-stepwise_model &lt;- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = &quot;both&quot;, trace = FALSE)
-
-# BIC Model
-stepAIC(fullmodel, trace = 0, k = log(nrow(final)))</code></pre>
-<pre><code>## Call:
-## coxph(formula = Surv(survival_months, status) ~ age + x6th_stage + 
-##     grade + log2(tumor_size + 1), data = final)
-## 
-##                          coef exp(coef) se(coef)     z        p
-## age                  0.015573  1.015695 0.004556 3.418 0.000630
-## x6th_stageIIB        0.164140  1.178379 0.146999 1.117 0.264162
-## x6th_stageIIIA       0.434744  1.544568 0.148781 2.922 0.003477
-## x6th_stageIIIB       0.934804  2.546713 0.267605 3.493 0.000477
-## x6th_stageIIIC       1.014208  2.757180 0.149308 6.793 1.10e-11
-## grade                0.376094  1.456584 0.070789 5.313 1.08e-07
-## log2(tumor_size + 1) 0.152548  1.164798 0.056176 2.716 0.006617
-## 
-## Likelihood ratio test=176.3  on 7 df, p=&lt; 2.2e-16
-## n= 1214, number of events= 607</code></pre>
-<pre class="r"><code>Bic_model &lt;- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + 
-                   log2(regional_node_examined + 1), data = final)
-summary(Bic_model)</code></pre>
-<pre><code>## Call:
-## coxph(formula = Surv(survival_months, status) ~ age + x6th_stage + 
-##     grade + log2(regional_node_examined + 1), data = final)
-## 
-##   n= 1214, number of events= 607 
-## 
-##                                      coef exp(coef) se(coef)      z Pr(&gt;|z|)
-## age                               0.01421   1.01431  0.00457  3.110  0.00187
-## x6th_stageIIB                     0.34148   1.40702  0.13456  2.538  0.01116
-## x6th_stageIIIA                    0.69810   2.00993  0.13177  5.298 1.17e-07
-## x6th_stageIIIB                    1.21579   3.37297  0.24664  4.930 8.24e-07
-## x6th_stageIIIC                    1.32659   3.76816  0.14156  9.371  &lt; 2e-16
-## grade                             0.37380   1.45324  0.07042  5.308 1.11e-07
-## log2(regional_node_examined + 1) -0.10158   0.90341  0.05038 -2.016  0.04375
-##                                     
-## age                              ** 
-## x6th_stageIIB                    *  
-## x6th_stageIIIA                   ***
-## x6th_stageIIIB                   ***
-## x6th_stageIIIC                   ***
-## grade                            ***
-## log2(regional_node_examined + 1) *  
-## ---
-## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
-## 
-##                                  exp(coef) exp(-coef) lower .95 upper .95
-## age                                 1.0143     0.9859    1.0053    1.0234
-## x6th_stageIIB                       1.4070     0.7107    1.0808    1.8316
-## x6th_stageIIIA                      2.0099     0.4975    1.5525    2.6022
-## x6th_stageIIIB                      3.3730     0.2965    2.0801    5.4695
-## x6th_stageIIIC                      3.7682     0.2654    2.8552    4.9731
-## grade                               1.4532     0.6881    1.2659    1.6683
-## log2(regional_node_examined + 1)    0.9034     1.1069    0.8185    0.9972
-## 
-## Concordance= 0.649  (se = 0.012 )
-## Likelihood ratio test= 172.8  on 7 df,   p=&lt;2e-16
-## Wald test            = 172.6  on 7 df,   p=&lt;2e-16
-## Score (logrank) test = 185.4  on 7 df,   p=&lt;2e-16</code></pre>
+stepwise_model &lt;- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = &quot;both&quot;, trace = FALSE)</code></pre>
 <p>Interaction and Parsimony Models</p>
 <pre class="r"><code># Interaction Model
 Inter_model &lt;- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
@@ -1837,11 +1778,6 @@ fullmodel$concordance</code></pre>
 ## 3.227740e+05 1.638700e+05 1.000000e+00 2.156000e+03 0.000000e+00 6.632648e-01 
 ##          std 
 ## 1.179906e-02</code></pre>
-<pre class="r"><code>Bic_model$concordance</code></pre>
-<pre><code>##   concordant   discordant       tied.x       tied.y      tied.xy  concordance 
-## 3.158360e+05 1.707470e+05 6.200000e+01 2.155000e+03 1.000000e+00 6.490707e-01 
-##          std 
-## 1.210437e-02</code></pre>
 <pre class="r"><code>Inter_model$concordance</code></pre>
 <pre><code>##   concordant   discordant       tied.x       tied.y      tied.xy  concordance 
 ## 3.235210e+05 1.631230e+05 1.000000e+00 2.156000e+03 0.000000e+00 6.647998e-01 
@@ -1855,16 +1791,12 @@ fullmodel$concordance</code></pre>
 <pre class="r"><code># Compare AIC and BIC
 AIC(fullmodel)</code></pre>
 <pre><code>## [1] 7810.739</code></pre>
-<pre class="r"><code>AIC(Bic_model)</code></pre>
-<pre><code>## [1] 7823.643</code></pre>
 <pre class="r"><code>AIC(Inter_model)</code></pre>
 <pre><code>## [1] 7809.962</code></pre>
 <pre class="r"><code>AIC(Par_model)</code></pre>
 <pre><code>## [1] 7815.374</code></pre>
 <pre class="r"><code>BIC(fullmodel)</code></pre>
 <pre><code>## [1] 7863.642</code></pre>
-<pre class="r"><code>BIC(Bic_model)</code></pre>
-<pre><code>## [1] 7854.502</code></pre>
 <pre class="r"><code>BIC(Inter_model)</code></pre>
 <pre><code>## [1] 7867.273</code></pre>
 <pre class="r"><code>BIC(Par_model)</code></pre>

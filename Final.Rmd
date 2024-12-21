@@ -375,13 +375,6 @@ nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = final)
 forward_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "forward", trace = FALSE)
 backward_model <- step(fullmodel, direction = "backward", trace = FALSE)
 stepwise_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "both", trace = FALSE)
-
-# BIC Model
-stepAIC(fullmodel, trace = 0, k = log(nrow(final)))
-Bic_model <- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + 
-                   log2(regional_node_examined + 1), data = final)
-summary(Bic_model)
-
 ```
 
 Interaction and Parsimony Models
@@ -403,18 +396,15 @@ Performance Evaluation
 ```{r}
 # Compare Models
 fullmodel$concordance
-Bic_model$concordance
 Inter_model$concordance
 Par_model$concordance
 
 # Compare AIC and BIC
 AIC(fullmodel)
-AIC(Bic_model)
 AIC(Inter_model)
 AIC(Par_model)
 
 BIC(fullmodel)
-BIC(Bic_model)
 BIC(Inter_model)
 BIC(Par_model)
 ```
