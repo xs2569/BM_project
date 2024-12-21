@@ -316,26 +316,114 @@ list(
 
 Survival Analysis Models
 ```{r}
-# Cox proportional hazards model
-cox_model <- coxph(Surv(survival_months, status) ~ age + grade + log_tumor_size + log_regional_node_examined + x6th_stage + a_stage_regional, data = project_2_data)
-summary(cox_model)
 
-# Stepwise variable selection (AIC and BIC)
-cox_aic <- step(cox_model, direction = "both", trace = FALSE)
-cox_bic <- stepAIC(cox_model, k = log(nrow(project_2_data)), trace = FALSE)
+### Multicollinearity Analysis
 
-# Time-dependent AUC
-compute_auc <- function(data, model, time_point) {
-  predictions <- predict(model, newdata = data, type = "risk")
-  survivalROC(Stime = data$survival_months, status = data$status, marker = predictions, predict.time = time_point, method = "KM")$AUC
-}
+cox_model <- coxph(Surv(survival_months, status) ~ , data = balance_data)
+vifs <- vif(cox_model)
+print(vifs)
 
-# Evaluate for different time points
-time_points <- c(25, 50, 75)
-auc_results <- sapply(time_points, function(tp) compute_auc(project_2_data, cox_model, tp))
-auc_results
+# Remove variables with high VIF scores
+balance_data <- balance_data |> 
+  dplyr::select(-t_stage, -n_stage, -reginol_node_positive)
 
 ```
+Variable Selection
+```{r}
+# Evaluate each variable individually
+variables <- names(balance_data)[!names(balance_data) %in% c("survival_months", "status")]
+for (var in variables) {
+  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
+  model <- coxph(formula, data = balance_data)
+  print(var)
+  print(summary(model))
+}
+
+# Recode and select relevant variables
+balance_data <- balance_data |> 
+  mutate(Married = ifelse(marital_status == "Married", 1, 0)) |> 
+  dplyr::select(-marital_status)
+
+```
+Assumption Testing
+```{r}
+# Evaluate each variable individually
+variables <- names(balance_data)[!names(balance_data) %in% c("survival_months", "status")]
+for (var in variables) {
+  formula <- as.formula(paste("Surv(survival_months, status) ~", var))
+  model <- coxph(formula, data = balance_data)
+  print(var)
+  print(summary(model))
+}
+
+# Recode and select relevant variables
+balance_data <- balance_data |> 
+  mutate(Married = ifelse(marital_status == "Married", 1, 0)) |> 
+  dplyr::select(-marital_status)
+
+```
+Model Fitting
+```{r}
+# Full Cox Model
+fullmodel <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                   log2(tumor_size + 1) + log2(regional_node_examined + 1) + 
+                   a_stage_regional + Married, data = final)
+summary(fullmodel)
+
+
+```
+Model Selection (AIC & BIC)
+```{r}
+# Stepwise Model Selection (AIC)
+nullmodel <- coxph(Surv(survival_months, status) ~ 1, data = final)
+forward_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "forward", trace = FALSE)
+backward_model <- step(fullmodel, direction = "backward", trace = FALSE)
+stepwise_model <- step(nullmodel, scope = list(lower = nullmodel, upper = fullmodel), direction = "both", trace = FALSE)
+
+# BIC Model
+stepAIC(fullmodel, trace = 0, k = log(nrow(final)))
+Bic_model <- coxph(Surv(survival_months, status) ~ age + x6th_stage + grade + 
+                   log2(regional_node_examined + 1), data = final)
+summary(Bic_model)
+
+```
+
+Interaction and Parsimony Models
+```{r}
+# Interaction Model
+Inter_model <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                     log2(tumor_size + 1) + log2(regional_node_examined + 1) + 
+                     a_stage_regional + Married + 
+                     Married * log2(regional_node_examined + 1), data = final)
+summary(Inter_model)
+
+# Parsimony Model
+Par_model <- coxph(Surv(survival_months, status) ~ age + race + x6th_stage + grade + 
+                   log2(regional_node_examined + 1), data = final)
+summary(Par_model)
+
+```
+Performance Evaluation
+```{r}
+# Compare Models
+fullmodel$concordance
+Bic_model$concordance
+Inter_model$concordance
+Par_model$concordance
+
+# Compare AIC and BIC
+AIC(fullmodel)
+AIC(Bic_model)
+AIC(Inter_model)
+AIC(Par_model)
+
+BIC(fullmodel)
+BIC(Bic_model)
+BIC(Inter_model)
+BIC(Par_model)
+
+```
+
 
 Comparison and Fairness Check
 ```{r}
