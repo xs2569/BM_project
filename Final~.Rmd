@@ -213,16 +213,53 @@ cat("Comparison table exported to 'aic_bic_stepwise_comparison.xlsx'")
 Model Evaluation
 ```{r}
 evaluate_model <- function(model, data, model_name) {
-  predictions <- predict(model, type = "response")
-  data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
-  conf_matrix <- confusionMatrix(factor(data$predicted_classes), factor(data$status))
-  roc_curve <- roc(data$status, predictions)
+  # Log-Likelihood
+  log_likelihood <- logLik(model)
+  cat("Log-Likelihood for", model_name, ":", log_likelihood, "\n")
   
-  list(
-    LogLikelihood = logLik(model),
-    ConfusionMatrix = conf_matrix,
-    AUC = auc(roc_curve)
-  )
+  # Predictions
+  predictions <- predict(model, type = "response")
+  
+  # Check for valid predictions
+  if (any(!is.finite(predictions))) {
+    cat("Invalid predictions detected for", model_name, "\n")
+    return(NULL)
+  }
+  
+  # Classify predictions
+  data$predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+  
+  # Ensure Consistent Factor Levels
+  data$predicted_classes <- factor(data$predicted_classes, levels = c(0, 1))
+  data$status <- factor(data$status, levels = c(0, 1))
+  
+  # Confusion Matrix
+  conf_matrix <- confusionMatrix(data$predicted_classes, data$status)
+  cat("Confusion Matrix for", model_name, ":\n")
+  print(conf_matrix)
+  
+  # AUC-ROC Calculation
+  if (any(is.na(data$status)) || any(is.na(predictions))) {
+    cat("Invalid data for ROC calculation in", model_name, "\n")
+    return(NULL)
+  }
+  
+  roc_curve <- tryCatch({
+    roc(as.numeric(as.character(data$status)), predictions)
+  }, error = function(e) {
+    cat("Error calculating ROC for", model_name, ":", e$message, "\n")
+    return(NULL)
+  })
+  
+  if (is.null(roc_curve)) {
+    cat("ROC calculation failed for", model_name, "\n")
+    return(NULL)
+  }
+  
+  auc_value <- auc(roc_curve)
+  cat("AUC for", model_name, ":", auc_value, "\n")
+  
+  return(list(conf_matrix = conf_matrix, auc = auc_value, roc_curve = roc_curve))
 }
 
 # Evaluate AIC and BIC Models
@@ -234,6 +271,7 @@ bic_backward_results <- evaluate_model(bic_backward_model, balance_data, "BIC Ba
 bic_both_results <- evaluate_model(bic_both_model, balance_data, "BIC Stepwise")
 
 # Plot ROC Curves
+
 plot(aic_forward_results$roc_curve, col = "blue", lwd = 2, main = "ROC Curves for All Models")
 lines(aic_backward_results$roc_curve, col = "green", lwd = 2)
 lines(aic_both_results$roc_curve, col = "cyan", lwd = 2)
@@ -274,6 +312,7 @@ list(
 )
 
 ```
+
 
 Survival Analysis Models
 ```{r}
