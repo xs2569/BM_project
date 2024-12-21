@@ -319,9 +319,9 @@ Survival Analysis Models
 
 ### Multicollinearity Analysis
 
-cox_model <- coxph(Surv(survival_months, status) ~ .-a_stage, data = balance_data)
-vifs <- vif(cox_model)
-print(vifs)
+cox_model <- coxph(Surv(survival_months, status) ~ .-a_stage -differentiate, data = balance_data)
+#vifs <- vif(cox_model)
+#print(vifs)
 
 # Remove variables with high VIF scores
 balance_data <- balance_data |> 
